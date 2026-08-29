@@ -1,0 +1,9 @@
+[package]
+name = "mtb_analytics"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fit = "0.5.0"
+fitsdk = "0.1.0"
+serde = { version = "1.0.229", features = ["derive", "serde_derive"] }
