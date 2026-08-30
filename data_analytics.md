@@ -5,6 +5,12 @@ followed by ascending and descending performance difference. I'd like to finish 
 comparison at large time losses with an overlay of a moving point on the map -- similar to Downhill
 worldcup visuals.
 
+### Visuals
+A few main goals for these:
+- Plot over GPS map
+- Ability to colorscale a variable alongside the gps plot
+- Want to be able to add labels alongside the gps plot to print out useful info (*ex: +5sec*)
+
 ### Split Gap
 This is the most basic form of comparison, looking to compare the splits at each gap in a segment. The
 distance between gaps should be set by the user? Maybe the best gap is really one dynamically based on

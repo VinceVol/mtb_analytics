@@ -1,5 +1,9 @@
 use std::io;
 
+use inquire::Select;
+
+use crate::segments::list_segments;
+
 mod activity;
 mod data_comp;
 mod segments;
@@ -13,36 +17,50 @@ fn main() {
     std::fs::create_dir_all(FIT_LOC).expect("unable to create Data Dir in release build");
     std::fs::create_dir_all(VIDEO_LOC).expect("unable to create Data Dir in release build");
     std::fs::create_dir_all(BIN_SAVE_LOC).expect("BINCODE folder unable to be created");
+
+    //user selects this based on those available -- this opens up other options
+    let mut segment_to_compare: Option<String> = None;
     loop {
-        println!(
-            "Choose a route \n 'SL' = List available Seg \n 'S: <>' = Choose Seg vs Latest \n 'C' = Compare Folder Files \n 'q' = quit"
-        );
+        match segment_to_compare {
+            Some(_) => {
+                println!(
+                    "Choose a route \n 'SL' = List available Seg \n 'Lat' PR vs Latest \n 'q' = quit"
+                );
+            }
+            None => {
+                println!("Choose a route \n 'SL' = List available Seg \n 'q' = quit");
+            }
+        }
         let mut input = String::new();
         io::stdin()
             .read_line(&mut input)
             .expect("Failed to read input");
 
         match input.trim().to_lowercase().as_str() {
-            "SL" => {
-                todo!();
+            "sl" => {
+                println!("-----------------------------------------------------");
+                let options = list_segments().expect("Unable to list segments");
+                println!("-----------------------------------------------------");
+                let ans = Select::new("Select a segment from list:", options).prompt();
+
+                match ans {
+                    Ok(choice) => segment_to_compare = Some(choice),
+                    Err(_) => println!("Error or cancelled (Esc/Ctrl+C)."),
+                }
+                println!("-----------------------------------------------------");
                 // new_descriptor_file(&cur_files);
             }
-            "C" => {
+            "lat" => {
+                if segment_to_compare.is_none() {
+                    println!("Still need to choose a segment!");
+                    continue;
+                }
                 todo!();
             }
             "q" => {
                 break;
             }
-            alternate_input => {
-                //brief input filtering -- only need partial answer from user
-                if !alternate_input.contains("S:") {
-                    println!("IMPROPER INPUT");
-                    continue;
-                }
-                let mut seg_in = alternate_input.replace("S:", "");
-                seg_in = seg_in.replace(" ", "");
-                todo!();
-            }
+            _ => println!("Improper input!"),
         }
     }
 }

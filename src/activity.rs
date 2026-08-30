@@ -200,7 +200,7 @@ impl Activity {
         }
     }
 
-    fn save_bin(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_bin(&self) -> Result<(), Box<dyn std::error::Error>> {
         let bytes = rkyv::to_bytes::<rancor::Error>(self)?;
 
         let fp = format!("{}{}.bin", BIN_SAVE_LOC, self.metadata_id);
@@ -208,7 +208,7 @@ impl Activity {
         the_file.write_all(&bytes)?;
         Ok(())
     }
-    fn open_bin(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn open_bin(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let fp = format!("{}{}.bin", BIN_SAVE_LOC, name);
         let mut file = std::fs::File::open(fp)?;
         let mut bytes = Vec::new();
