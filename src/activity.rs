@@ -1,32 +1,40 @@
-use std::path::PathBuf;
+use std::{
+    fs,
+    io::{Read, Write},
+    path::{Path, PathBuf},
+};
 
 use fit::{Fit, Value};
 
-use serde::{Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize, access, deserialize, rancor};
+
+use crate::{BIN_SAVE_LOC, FIT_LOC};
 
 // Dense time-series: stored in contiguous memory (Structure of Arrays)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Archive, Serialize, Deserialize)]
+#[rkyv(compare(PartialEq), derive(Debug))]
 pub struct TrackpointDataFrame {
-    pub timestamps: Vec<i64>, // Unix timestamps (seconds)
-    pub distance_m: Vec<f32>, // Distance in meters
-    pub speed_kmh: Vec<f32>,  // Converted speed
-    pub heart_rate: Vec<u8>,  // Direct bpm
-    pub latitude: Vec<f64>,   // Decimal degrees
-    pub longitude: Vec<f64>,  // Decimal degrees
-    pub altitude_m: Vec<f32>, // Meters
-    pub slope_pct: Vec<f32>,  // Derived slope %
+    pub timestamps: Vec<Option<u32>>, // Unix timestamps (seconds)
+    pub distance_m: Vec<Option<u32>>, // Distance in meters
+    pub speed_kmh: Vec<Option<f32>>,  // Converted speed
+    pub heart_rate: Vec<Option<u8>>,  // Direct bpm
+    pub latitude: Vec<Option<f32>>,   // Decimal degrees
+    pub longitude: Vec<Option<f32>>,  // Decimal degrees
+    pub altitude_m: Vec<Option<u32>>, // Meters
+    pub slope_pct: Vec<Option<f32>>,  // Derived slope %
 }
 
 // Sparse event metadata
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Archive, Serialize, Deserialize)]
+#[rkyv(compare(PartialEq), derive(Debug))]
 pub struct SegmentRef {
-    pub name: String,
-    pub start_dist: f32, // meters into the activity
-    pub end_dist: f32,
-    pub elapsed_sec: f64,
+    pub name: Option<String>,
+    pub start_time: Option<u32>,
+    pub end_time: Option<u32>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Archive, Serialize, Deserialize)]
+#[rkyv(compare(PartialEq), derive(Debug))]
 pub struct Activity {
     pub metadata_id: String,
     pub segments: Vec<SegmentRef>,
@@ -34,32 +42,102 @@ pub struct Activity {
 }
 
 impl Activity {
-    fn new(fp: PathBuf) {
+    fn refresh_bin() -> Result<(), Box<dyn std::error::Error>> {
+        //Start by figuring out what bins already exist
+        let mut cur_bins: Vec<String> = Vec::new();
+        for entry_res in fs::read_dir(BIN_SAVE_LOC)? {
+            if let Ok(entry) = entry_res {
+                cur_bins.push(
+                    entry
+                        .file_name()
+                        .to_str()
+                        .unwrap()
+                        .to_owned()
+                        .replace(".bin", ""),
+                );
+            }
+        }
+
+        //iterate through fit files and add the ones that don't exist
+        for entry_res in fs::read_dir(FIT_LOC)? {
+            if let Ok(entry) = entry_res {
+                if !cur_bins.contains(&entry.file_name().into_string().unwrap().replace(".fit", ""))
+                {
+                    Activity::add(entry.path());
+                }
+            }
+        }
+        Ok(())
+    }
+    fn add(fp: PathBuf) -> Self {
+        //Trackpoint data frame initialization
+        let mut trackpoint_dataframe = TrackpointDataFrame {
+            timestamps: Vec::new(),
+            distance_m: Vec::new(),
+            speed_kmh: Vec::new(),
+            heart_rate: Vec::new(),
+            latitude: Vec::new(),
+            longitude: Vec::new(),
+            altitude_m: Vec::new(),
+            slope_pct: Vec::new(),
+        };
+        //segment data
+        let mut segments: Vec<SegmentRef> = Vec::new();
         let fit = Fit::new(&fp);
         for m in fit {
             match m.kind {
                 //Save segment info
                 fitsdk::MessageType::SegmentLap => {
-                    println!("segment data!");
-                    dbg!(&m.values);
+                    let mut name: Option<String> = None; //29
+                    let mut start_time: Option<u32> = None; //2 
+                    let mut end_time: Option<u32> = None; //2 + 7
+                    for field in m.values {
+                        match field.field_num {
+                            29 => {
+                                if let Value::String(name_str) = field.value {
+                                    name = Some(name_str);
+                                }
+                            }
+                            2 => {
+                                if let Value::Time(date_time) = field.value {
+                                    start_time = Some(date_time);
+                                }
+                            }
+                            7 => {
+                                if let Value::Time(date_time) = field.value {
+                                    let elapsed_time = Some(date_time);
+                                    if start_time.is_some() {
+                                        end_time =
+                                            Some(start_time.unwrap() + elapsed_time.unwrap());
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    segments.push(SegmentRef {
+                        name,
+                        start_time,
+                        end_time,
+                    })
                 }
                 //Save time info
-                //field 3 is local time
                 fitsdk::MessageType::Record => {
-                    let mut time: Option<u32> = None; //264
+                    // dbg!(&m.values);
+                    let mut timestamp: Option<u32> = None; //253
                     let mut distance_m: Option<u32> = None; //5
-                    let mut speed_kmh: Option<u16> = None; //6
+                    let mut speed_kmh: Option<f32> = None; //6
                     let mut heart_rate: Option<u8> = None; //3  
-                    let mut latitude: Option<i32> = None; //0   
-                    let mut longitude: Option<i32> = None; //1 
-                    let mut altitude_m: Option<u16> = None; //2
+                    let mut latitude: Option<f32> = None; //0   
+                    let mut longitude: Option<f32> = None; //1 
+                    let mut altitude_m: Option<u32> = None; //78
                     let mut slope_pct: Option<f32> = None;
 
                     for field in m.values {
                         match field.field_num {
-                            264 => {
-                                if let Value::Time(timestamp) = field.value {
-                                    time = Some(timestamp);
+                            253 => {
+                                if let Value::Time(timestmp) = field.value {
+                                    timestamp = Some(timestmp);
                                 }
                             }
                             5 => {
@@ -67,9 +145,9 @@ impl Activity {
                                     distance_m = Some(distance);
                                 }
                             }
-                            6 => {
-                                if let Value::U16(speed) = field.value {
-                                    speed_kmh = Some(speed);
+                            73 => {
+                                if let Value::U32(speed) = field.value {
+                                    speed_kmh = Some((speed as f32) / 1000.0);
                                 }
                             }
                             3 => {
@@ -79,44 +157,80 @@ impl Activity {
                             }
 
                             0 => {
-                                if let Value::I32(lat) = field.value {
+                                if let Value::F32(lat) = field.value {
                                     latitude = Some(lat);
                                 }
                             }
                             1 => {
-                                if let Value::I32(long) = field.value {
+                                if let Value::F32(long) = field.value {
                                     longitude = Some(long);
                                 }
                             }
-                            2 => {
-                                if let Value::U16(alt) = field.value {
+                            78 => {
+                                if let Value::U32(alt) = field.value {
                                     altitude_m = Some(alt);
                                 }
                             }
                             _ => {}
                         }
                     }
+                    trackpoint_dataframe.timestamps.push(timestamp);
+                    trackpoint_dataframe.distance_m.push(distance_m);
+                    trackpoint_dataframe.speed_kmh.push(speed_kmh);
+                    trackpoint_dataframe.heart_rate.push(heart_rate);
+                    trackpoint_dataframe.latitude.push(latitude);
+                    trackpoint_dataframe.longitude.push(longitude);
+                    trackpoint_dataframe.altitude_m.push(altitude_m);
+                    trackpoint_dataframe.slope_pct.push(slope_pct);
                 }
                 _ => continue,
             }
         }
+        Self {
+            metadata_id: fp
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+                .replace(".fit", ""),
+            segments: segments,
+            telemetry: trackpoint_dataframe,
+        }
     }
-    //eventually return something
+
+    fn save_bin(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let bytes = rkyv::to_bytes::<rancor::Error>(self)?;
+
+        let fp = format!("{}{}.bin", BIN_SAVE_LOC, self.metadata_id);
+        let mut the_file = std::fs::File::create(fp)?;
+        the_file.write_all(&bytes)?;
+        Ok(())
+    }
+    fn open_bin(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let fp = format!("{}{}.bin", BIN_SAVE_LOC, name);
+        let mut file = std::fs::File::open(fp)?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+
+        // let archived = access::<ArchivedActivity, rancor::Error>(&bytes)?;
+        let archived = rkyv::access::<ArchivedActivity, rancor::Error>(&bytes[..]).unwrap();
+        let activity: Activity = deserialize::<Activity, rancor::Error>(archived)?;
+        Ok(activity)
+    }
 }
 
+#[cfg(test)]
 mod d_test {
-    use std::{
-        fs,
-        path::{Path, PathBuf},
-    };
+    use std::path::PathBuf;
 
     use super::*;
-
     #[test]
     fn test_fit() {
-        Activity::new(PathBuf::from(
-            "./Data/thatonematrixman@gmail.com_470194221701.fit",
-        ));
+        // dbg!(Activity::add(PathBuf::from(
+        //     "./Data/thatonematrixman@gmail.com_470194221701.fit",
+        // )));
+        Activity::refresh_bin();
         assert_eq!(false, true);
     }
 }

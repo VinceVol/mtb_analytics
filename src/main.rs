@@ -3,10 +3,15 @@ use std::io;
 mod activity;
 mod segments;
 
+pub static FIT_LOC: &'static str = "./Data/";
+pub static BIN_SAVE_LOC: &'static str = "./BIN_DATA/";
+pub static VIDEO_LOC: &'static str = "./Video/";
+
 fn main() {
     //Make sure the proper folders exists
-    std::fs::create_dir_all("./Data/").expect("unable to create Data Dir in release build");
-    std::fs::create_dir_all("./Video/").expect("unable to create Data Dir in release build");
+    std::fs::create_dir_all(FIT_LOC).expect("unable to create Data Dir in release build");
+    std::fs::create_dir_all(VIDEO_LOC).expect("unable to create Data Dir in release build");
+    std::fs::create_dir_all(BIN_SAVE_LOC).expect("BINCODE folder unable to be created");
     loop {
         println!(
             "Choose a route \n 'SL' = List available Seg \n 'S: <>' = Choose Seg vs Latest \n 'C' = Compare Folder Files \n 'q' = quit"
