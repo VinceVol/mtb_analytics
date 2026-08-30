@@ -63,7 +63,8 @@ impl Activity {
             if let Ok(entry) = entry_res {
                 if !cur_bins.contains(&entry.file_name().into_string().unwrap().replace(".fit", ""))
                 {
-                    Activity::add(entry.path());
+                    let activity = Activity::add(entry.path());
+                    activity.save_bin();
                 }
             }
         }

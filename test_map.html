@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GPS Map Track</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { height: 100vh; width: 100vw; }
+        
+        /* Custom clean text badge styling */
+        .map-label-badge {
+            background-color: #1e293b;
+            color: #ffffff;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-family: system-ui, -apple-system, sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            border: 1px solid #475569;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        const map = L.map('map');
+
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: 'Tiles © Esri'
+        }).addTo(map);
+
+        const trackData = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-122.4194,37.7749],[-122.4185,37.7752]]},"properties":{"speed":18.0,"stroke":"#62FF00"}},{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-122.4185,37.7752],[-122.4172,37.7758]]},"properties":{"speed":35.0,"stroke":"#E4FF00"}},{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-122.4172,37.7758],[-122.4158,37.7766]]},"properties":{"speed":55.0,"stroke":"#FF8100"}},{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-122.4158,37.7766],[-122.4141,37.7775]]},"properties":{"speed":72.0,"stroke":"#FF0000"}},{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-122.4141,37.7775],[-122.4128,37.7783]]},"properties":{"speed":40.0,"stroke":"#FFF300"}},{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-122.4128,37.7783],[-122.4115,37.7791]]},"properties":{"speed":8.0,"stroke":"#16FF00"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-122.4194,37.7749]},"properties":{"label":"Start Line"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-122.4141,37.7775]},"properties":{"label":"Max Speed: 72.0"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-122.4115,37.7791]},"properties":{"label":"Finish Line"}}]};
+        const layer = L.geoJSON(trackData, {
+            style: feature => ({
+                color: feature.properties.stroke || '#FF0000',
+                weight: 6,
+                opacity: 0.9
+            }),
+            pointToLayer: (feature, latlng) => {
+                if (feature.properties && feature.properties.label) {
+                    const labelIcon = L.divIcon({
+                        className: 'custom-map-label',
+                        html: `<div class="map-label-badge">${feature.properties.label}</div>`,
+                        iconSize: null
+                    });
+                    return L.marker(latlng, { icon: labelIcon });
+                }
+                return L.marker(latlng);
+            },
+            onEachFeature: (feature, layer) => {
+                if (feature.properties && feature.properties["speed"] !== undefined) {
+                    layer.bindPopup("speed: " + feature.properties["speed"]);
+                }
+            }
+        }).addTo(map);
+
+        map.fitBounds(layer.getBounds());
+    </script>
+</body>
+</html>

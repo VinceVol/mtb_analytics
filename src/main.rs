@@ -1,6 +1,7 @@
 use std::io;
 
 mod activity;
+mod data_comp;
 mod segments;
 
 pub static FIT_LOC: &'static str = "./Data/";
