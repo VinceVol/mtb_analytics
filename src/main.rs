@@ -11,6 +11,7 @@ mod segments;
 pub static FIT_LOC: &'static str = "./Data/";
 pub static BIN_SAVE_LOC: &'static str = "./BIN_DATA/";
 pub static VIDEO_LOC: &'static str = "./Video/";
+pub static SEGMENT_LOC: &'static str = "./SEGMENTS/";
 
 fn main() {
     //Make sure the proper folders exists
@@ -38,7 +39,6 @@ fn main() {
 
         match input.trim().to_lowercase().as_str() {
             "sl" => {
-                println!("-----------------------------------------------------");
                 let options = list_segments().expect("Unable to list segments");
                 println!("-----------------------------------------------------");
                 let ans = Select::new("Select a segment from list:", options).prompt();
