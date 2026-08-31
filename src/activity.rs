@@ -42,7 +42,7 @@ pub struct Activity {
 }
 
 impl Activity {
-    fn refresh_bin() -> Result<(), Box<dyn std::error::Error>> {
+    pub fn refresh_bin() -> Result<(), Box<dyn std::error::Error>> {
         //Start by figuring out what bins already exist
         let mut cur_bins: Vec<String> = Vec::new();
         for entry_res in fs::read_dir(BIN_SAVE_LOC)? {

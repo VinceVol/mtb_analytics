@@ -2,7 +2,7 @@ use std::io;
 
 use inquire::Select;
 
-use crate::segments::list_segments;
+use crate::{activity::Activity, segments::list_segments};
 
 mod activity;
 mod data_comp;
@@ -18,6 +18,9 @@ fn main() {
     std::fs::create_dir_all(FIT_LOC).expect("unable to create Data Dir in release build");
     std::fs::create_dir_all(VIDEO_LOC).expect("unable to create Data Dir in release build");
     std::fs::create_dir_all(BIN_SAVE_LOC).expect("BINCODE folder unable to be created");
+
+    //Refresh the data folder for any new uploads
+    Activity::refresh_bin().expect("Unable to refresh bin");
 
     //user selects this based on those available -- this opens up other options
     let mut segment_to_compare: Option<String> = None;
