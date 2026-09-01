@@ -3,6 +3,10 @@ use std::{fs, path::PathBuf};
 use crate::{BIN_SAVE_LOC, activity::Activity};
 use nalgebra::{Point2, Vector, Vector2};
 use rkyv::{Archive, Deserialize, Serialize, access, deserialize, rancor};
+use utm::{
+    lat_lon_to_zone_number, lat_to_zone_letter, to_utm_wgs84, to_utm_wgs84_no_zone,
+    wsg84_utm_to_lat_lon,
+};
 
 //Starting with gaps -- basically split gaps at different intervals as I think categorizing
 // turns may be a difficult starting point not worth digging into right at the start
@@ -34,37 +38,42 @@ struct Gate {
 }
 
 impl Gate {
-    fn new(points: [(f32, f32); 3], length: f32) -> Gate {
-        todo!("Need to convert to metric then do vector math then convert back to lon,lat");
+    //length is in meters
+    fn new(points: [(f32, f32); 3], length_m: f64) -> Gate {
+        let (utm_points, ref_mat) = points_to_utm(points);
         //check the data_analytics image under gates (2.1) for what the goal is here
-        let point_a = Point2::new(points[0].0, points[0].1);
-        let point_b = Point2::new(points[1].0, points[1].1);
-        let point_c = Point2::new(points[2].0, points[2].1);
+        let point_a = Point2::new(utm_points[0].0, utm_points[0].1);
+        let point_b = Point2::new(utm_points[1].0, utm_points[1].1);
+        let point_c = Point2::new(utm_points[2].0, utm_points[2].1);
 
         //vectorize the two lines then grab the normalized perpindicular line
-        let vec_ab: Vector2<f32> = point_b - point_a;
-        let vec_bc: Vector2<f32> = point_c - point_b;
-        let vec_ab_perp: Vector2<f32> = Vector2::new(-vec_ab.y, vec_ab.x);
-        let vec_bc_perp: Vector2<f32> = Vector2::new(-vec_bc.y, vec_bc.x);
-        let norm_vec_ab_perp = vec_ab_perp.normalize() * length / 2.0;
-        let norm_vec_bc_perp = vec_bc_perp.normalize() * length / 2.0;
+        let vec_ab: Vector2<f64> = point_b - point_a;
+        let vec_bc: Vector2<f64> = point_c - point_b;
+        let vec_ab_perp: Vector2<f64> = Vector2::new(-vec_ab.y, vec_ab.x);
+        let vec_bc_perp: Vector2<f64> = Vector2::new(-vec_bc.y, vec_bc.x);
+        let norm_vec_ab_perp = vec_ab_perp.normalize() * length_m / 2.0;
+        let norm_vec_bc_perp = vec_bc_perp.normalize() * length_m / 2.0;
 
         //Form those two gates based on the two vectors than take the midpoints
         // to form the new finalized gate
         let ab_gate = (point_a - norm_vec_ab_perp, point_b + norm_vec_ab_perp);
         let bc_gate = (point_b - norm_vec_bc_perp, point_c + norm_vec_bc_perp);
-        let full_gate: Vector2<f32> = (ab_gate.1 + (bc_gate.1 - ab_gate.1) / 2.0)
+        let full_gate: Vector2<f64> = (ab_gate.1 + (bc_gate.1 - ab_gate.1) / 2.0)
             - (ab_gate.0 + (bc_gate.0 - ab_gate.0) / 2.0);
 
         //Normalize the full gate and apply the length to it
-        let full_norm = full_gate.normalize() * length / 2.0;
+        let full_norm = full_gate.normalize() * length_m / 2.0;
 
         let full_left = point_b - full_norm;
         let full_right = point_b - full_norm;
 
+        let left_point = (full_left.x, full_right.y);
+        let right_point = (full_right.x, full_right.y);
+
+        //They're both using the same zone and letter because they should be very close to one another
         Gate {
-            left_pivot: (full_left.x, full_right.y),
-            right_pivot: (full_right.x, full_right.y),
+            left_pivot: utm_to_points([left_point], [ref_mat[0]])[0],
+            right_pivot: utm_to_points([right_point], [ref_mat[0]])[0],
         }
     }
 }
@@ -134,8 +143,8 @@ fn map_segment(ref_activity: &Activity, seg_name: &str) -> Result<(), Box<dyn st
 
             //If any of the coordinates didn't exist (yielding the initial 420.0) then skip
             if !three_points.iter().any(|(x, y)| *x == 420.0 || *y == 420.0) {
-                let gate = Gate::new(three_points);
-                continue;
+                let gate = Gate::new(three_points, 4.0);
+                todo!("Push to small/med/long vecs");
             }
         }
     }
@@ -163,6 +172,40 @@ pub fn list_segments() -> Result<Vec<String>, Box<dyn std::error::Error>> {
     }
     Ok(seg_name_list)
 }
-fn seg_exists(name: &str) -> Segment {
-    todo!();
+
+//Cannot do vector math directily on lon,lat points as the earth isn't flat
+// utm should be a unit that works well with vectors
+fn points_to_utm<const N: usize>(points: [(f32, f32); N]) -> ([(f64, f64); N], [(u8, char); N]) {
+    let mut utm_points: [(f64, f64); N] = [(0.0, 0.0); N];
+    let mut zone_num_letter: [(u8, char); N] = [(0, 'a'); N];
+    for (i, (lon, lat)) in points.iter().enumerate() {
+        let (northing, easting, _) = to_utm_wgs84_no_zone(*lat as f64, *lon as f64);
+        let zone = lat_lon_to_zone_number(*lat as f64, *lon as f64);
+        let letter = lat_to_zone_letter(*lat as f64).unwrap_or('N');
+
+        zone_num_letter[i] = (zone, letter);
+        utm_points[i] = (easting, northing);
+    }
+
+    (utm_points, zone_num_letter)
+}
+
+fn utm_to_points<const N: usize>(
+    utm_points: [(f64, f64); N],
+    zone_num_letter: [(u8, char); N],
+) -> [(f32, f32); N] {
+    let mut points: [(f32, f32); N] = [(0.0, 0.0); N];
+    for (i, (easting, northing)) in utm_points.iter().enumerate() {
+        let (lat, lon) = wsg84_utm_to_lat_lon(
+            *easting,
+            *northing,
+            zone_num_letter[i].0,
+            zone_num_letter[i].1,
+        )
+        .unwrap();
+
+        points[i] = (lon as f32, lat as f32);
+    }
+
+    points
 }
