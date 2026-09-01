@@ -30,7 +30,8 @@ pub struct TrackpointDataFrame {
 pub struct SegmentRef {
     pub name: Option<String>,
     pub start_time: Option<u32>,
-    pub end_time: Option<u32>,
+    pub elapsed_time: Option<u32>, //milliseconds
+    pub distance: Option<u32>,     // 1over100m
 }
 
 #[derive(Debug, Archive, Serialize, Deserialize)]
@@ -64,7 +65,7 @@ impl Activity {
                 if !cur_bins.contains(&entry.file_name().into_string().unwrap().replace(".fit", ""))
                 {
                     let activity = Activity::add(entry.path());
-                    activity.save_bin();
+                    activity.save_bin()?;
                 }
             }
         }
@@ -91,7 +92,8 @@ impl Activity {
                 fitsdk::MessageType::SegmentLap => {
                     let mut name: Option<String> = None; //29
                     let mut start_time: Option<u32> = None; //2 
-                    let mut end_time: Option<u32> = None; //2 + 7
+                    let mut elapsed_time: Option<u32> = None; // 7
+                    let mut distance: Option<u32> = None; //9
                     for field in m.values {
                         match field.field_num {
                             29 => {
@@ -105,22 +107,26 @@ impl Activity {
                                 }
                             }
                             7 => {
-                                if let Value::Time(date_time) = field.value {
-                                    let elapsed_time = Some(date_time);
-                                    if start_time.is_some() {
-                                        end_time =
-                                            Some(start_time.unwrap() + elapsed_time.unwrap());
-                                    }
+                                if let Value::U32(date_time) = field.value {
+                                    elapsed_time = Some(date_time);
+                                }
+                            }
+                            9 => {
+                                if let Value::U32(dist) = field.value {
+                                    distance = Some(dist);
                                 }
                             }
                             _ => {}
                         }
                     }
-                    segments.push(SegmentRef {
-                        name,
-                        start_time,
-                        end_time,
-                    })
+                    if name.is_some() && start_time.is_some() && elapsed_time.is_some() {
+                        segments.push(SegmentRef {
+                            name,
+                            start_time,
+                            elapsed_time,
+                            distance,
+                        })
+                    }
                 }
                 //Save time info
                 fitsdk::MessageType::Record => {
