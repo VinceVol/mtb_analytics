@@ -11,9 +11,9 @@ use rkyv::{Archive, Deserialize, Serialize, access, deserialize, rancor};
 #[rkyv(compare(PartialEq), derive(Debug))]
 struct Segment {
     name: String,
-    small_gap: Vec<gate>, //every 5 readings on ref
-    med_gap: Vec<gate>,   //every 20 readings on ref
-    large_gap: Vec<gate>, //every 60 readings on ref
+    small_gap: Vec<Gate>, //every 5 readings on ref
+    med_gap: Vec<Gate>,   //every 20 readings on ref
+    large_gap: Vec<Gate>, //every 60 readings on ref
                           // uphills: Vec<(gate,gate)>,
                           // downhills: Vec<(gate,gate)>,
 }
@@ -21,17 +21,21 @@ struct Segment {
 // using gate as a method of capturing when the rider goes through a part on the path.
 // a line from left to right pivot show the gate itself and the in/out ref are to be able
 // to compare whether the rider is going through the gate in the right direction
+// ---------------
+// for now I dont think I actually need a inside and outside ref given that
+// segments are run in one direction and that gates are crossed in order
 #[derive(Debug, Archive, Serialize, Deserialize)]
 #[rkyv(compare(PartialEq), derive(Debug))]
-struct gate {
+struct Gate {
     left_pivot: (f32, f32),
     right_pivot: (f32, f32),
-    inside_ref: (f32, f32),
-    outside_ref: (f32, f32),
+    // inside_ref: (f32, f32),
+    // outside_ref: (f32, f32),
 }
 
-impl gate {
-    fn new(points: [(f32, f32); 3], length: f32) -> Option<gate> {
+impl Gate {
+    fn new(points: [(f32, f32); 3], length: f32) -> Gate {
+        todo!("Need to convert to metric then do vector math then convert back to lon,lat");
         //check the data_analytics image under gates (2.1) for what the goal is here
         let point_a = Point2::new(points[0].0, points[0].1);
         let point_b = Point2::new(points[1].0, points[1].1);
@@ -49,14 +53,19 @@ impl gate {
         // to form the new finalized gate
         let ab_gate = (point_a - norm_vec_ab_perp, point_b + norm_vec_ab_perp);
         let bc_gate = (point_b - norm_vec_bc_perp, point_c + norm_vec_bc_perp);
-        let full_gate = Vector2::new(
-            (ab_gate.0 + (bc_gate.0 - ab_gate.0) / 2.0),
-            (ab_gate.1 + (bc_gate.1 - ab_gate.1) / 2.0),
-        );
+        let full_gate: Vector2<f32> = (ab_gate.1 + (bc_gate.1 - ab_gate.1) / 2.0)
+            - (ab_gate.0 + (bc_gate.0 - ab_gate.0) / 2.0);
 
         //Normalize the full gate and apply the length to it
+        let full_norm = full_gate.normalize() * length / 2.0;
 
-        todo!();
+        let full_left = point_b - full_norm;
+        let full_right = point_b - full_norm;
+
+        Gate {
+            left_pivot: (full_left.x, full_right.y),
+            right_pivot: (full_right.x, full_right.y),
+        }
     }
 }
 
@@ -84,9 +93,9 @@ impl Segment {
 fn map_segment(ref_activity: &Activity, seg_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     //start with some blank vectors to fill
 
-    let mut turns: Vec<((f32, f32), (f32, f32))> = Vec::new();
-    let mut uphills: Vec<((f32, f32), (f32, f32))> = Vec::new();
-    let mut downhills: Vec<((f32, f32), (f32, f32))> = Vec::new();
+    let mut small_gap: Vec<Gate> = Vec::new(); //every 5 readings on ref
+    let mut med_gap: Vec<Gate> = Vec::new(); //every 20 readings on ref
+    let mut large_gap: Vec<Gate> = Vec::new(); //every 60 readings on ref
 
     //choose the first occurence of the segment within the activity
     let seg_ref_index = ref_activity
@@ -100,13 +109,36 @@ fn map_segment(ref_activity: &Activity, seg_name: &str) -> Result<(), Box<dyn st
         .telemetry
         .timestamps
         .iter()
-        .position(|t| t >= &ref_activity.segments[seg_ref_index].start_time);
+        .position(|t| t >= &ref_activity.segments[seg_ref_index].start_time)
+        .ok_or("segment start position not found")?;
     let seg_end_ind = ref_activity
         .telemetry
         .timestamps
         .iter()
-        .position(|t| t >= &ref_activity.segments[seg_ref_index].end_time);
+        .position(|t| t >= &ref_activity.segments[seg_ref_index].end_time)
+        .ok_or("Segment end position not found")?;
 
+    let mut three_points: [(f32, f32); 3] = [(420.0, 420.0); 3];
+    for i in seg_start_ind..seg_end_ind {
+        if i / 5 == (i as f32 / 5.0) as usize && i + 3 <= seg_end_ind {
+            for (a, ii) in (i..i + 3).enumerate() {
+                let (lon, lat) = (
+                    ref_activity.telemetry.longitude[ii],
+                    ref_activity.telemetry.latitude[ii],
+                );
+                if lon.is_some() && lat.is_some() {
+                    three_points[a].0 = lon.unwrap();
+                    three_points[a].1 = lat.unwrap();
+                }
+            }
+
+            //If any of the coordinates didn't exist (yielding the initial 420.0) then skip
+            if !three_points.iter().any(|(x, y)| *x == 420.0 || *y == 420.0) {
+                let gate = Gate::new(three_points);
+                continue;
+            }
+        }
+    }
     todo!();
 }
 
