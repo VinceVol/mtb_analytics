@@ -32,6 +32,7 @@ pub struct SegmentRef {
     pub start_time: Option<u32>,
     pub elapsed_time: Option<u32>, //milliseconds
     pub distance: Option<u32>,     // 1over100m
+    pub t_min_pause: Option<u32>,  //milliseconds
 }
 
 #[derive(Debug, Archive, Serialize, Deserialize)]
@@ -94,6 +95,7 @@ impl Activity {
                     let mut start_time: Option<u32> = None; //2 
                     let mut elapsed_time: Option<u32> = None; // 7
                     let mut distance: Option<u32> = None; //9
+                    let mut t_min_pause: Option<u32> = None; // 8
                     for field in m.values {
                         match field.field_num {
                             29 => {
@@ -116,6 +118,11 @@ impl Activity {
                                     distance = Some(dist);
                                 }
                             }
+                            8 => {
+                                if let Value::U32(date_time) = field.value {
+                                    t_min_pause = Some(date_time);
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -125,6 +132,7 @@ impl Activity {
                             start_time,
                             elapsed_time,
                             distance,
+                            t_min_pause,
                         })
                     }
                 }

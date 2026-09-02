@@ -60,7 +60,6 @@ fn main() {
                     continue;
                 }
                 let segment = Segment::check_seg(&segment_to_compare.as_ref().unwrap()).unwrap();
-                dbg!(segment);
             }
             "q" => {
                 break;

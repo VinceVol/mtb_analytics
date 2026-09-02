@@ -90,7 +90,7 @@ impl Segment {
         let mut med_gap: Vec<u64> = Vec::new(); //every 20 readings on ref
         let mut large_gap: Vec<u64> = Vec::new(); //every 60 readings on ref
 
-        dbg!(&ref_activity.segments);
+        // dbg!(&ref_activity.segments);
         //choose the first occurence of the segment within the activity
         let seg_ref_index = ref_activity
             .segments
@@ -127,7 +127,6 @@ impl Segment {
             .ok_or("segment end position not found")?;
 
         let mut three_points: [(f32, f32); 3] = [(420.0, 420.0); 3];
-        println!("Range to cover {}:{}", &seg_start_ind, &seg_end_ind);
         for i in seg_start_ind..seg_end_ind {
             if (i as f32 / 5.0) == (i as f32 / 5.0) as usize as f32 && i + 3 <= seg_end_ind {
                 for (a, ii) in (i..i + 3).enumerate() {
@@ -177,21 +176,40 @@ impl Segment {
                 if let Ok(activity) = Activity::open_bin(
                     &entry.file_name().into_string().unwrap().replace(".bin", ""),
                 ) {
-                    todo!();
-                    if let activity
-                        .segments
-                        .iter()
-                        .any(|s| s.name.as_ref().is_some_and(|ss| ss == seg_name))
-                    {
-                        file_v_seg.push((entry.file_name(),activity.segments.iter().find_map(|s| s.name.unwrap() == seg_name).unwrap()))
-                        let segment = Segment::new(&activity, seg_name)?;
-                        segment.save_bin()?;
-                        return Ok(segment);
+                    //Logic is -- if the segment name matches to the one your looking for and both the t_min_pause == t w pause
+                    // basically if the run doesnt contain pauses (avoid where maybe I turned back to grab something)
+                    if let Some(ref_segment) = activity.segments.iter().find(|s| {
+                        if s.name.as_ref().is_some_and(|ss| ss == seg_name)
+                            && s.elapsed_time.is_some()
+                            && s.t_min_pause.is_some()
+                        {
+                            if s.elapsed_time.unwrap() == s.t_min_pause.unwrap() {
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    }) {
+                        file_v_seg.push((entry.file_name(), ref_segment.elapsed_time.unwrap()));
                     }
                 }
             }
         }
-        Err("check_seg may have not found a compatable segment".into())
+
+        //Longest time first shortest time last -> open that activity
+        file_v_seg.sort_by(|(_file_1, el_time_1), (_file_2, el_time_2)| el_time_2.cmp(el_time_1));
+        let long_act_nme = file_v_seg
+            .first()
+            .ok_or("Longest activity vector for finding a reference segment")?
+            .0
+            .to_str()
+            .unwrap();
+        let long_act = Activity::open_bin(&long_act_nme.replace(".bin", ""))?;
+        let segment = Segment::new(&long_act, seg_name)?;
+        segment.save_bin()?;
+        return Ok(segment);
     }
 
     fn save_bin(&self) -> Result<(), Box<dyn std::error::Error>> {
