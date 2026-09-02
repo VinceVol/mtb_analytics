@@ -2,7 +2,10 @@ use std::io;
 
 use inquire::Select;
 
-use crate::{activity::Activity, segments::Segment, segments::list_segments};
+use crate::{
+    activity::Activity,
+    segments::{Segment, avail_seg_act, list_segments},
+};
 
 mod activity;
 mod data_comp;
@@ -52,14 +55,28 @@ fn main() {
                     Err(_) => println!("Error or cancelled (Esc/Ctrl+C)."),
                 }
                 println!("-----------------------------------------------------");
-                // new_descriptor_file(&cur_files);
             }
             "lat" => {
                 if segment_to_compare.is_none() {
                     println!("Still need to choose a segment!");
                     continue;
                 }
-                let segment = Segment::check_seg(&segment_to_compare.as_ref().unwrap()).unwrap();
+                //Generate list of runs that did the segment without pausing that come within
+                // 0.5km of the ref segment
+                let mut run_list = avail_seg_act(&segment_to_compare.as_ref().unwrap()).unwrap();
+
+                //For the PR run grab the shortest time
+                run_list.sort_by(|(_, t1, _), (_, t2, _)| t1.cmp(t2));
+                dbg!(&run_list);
+                let pr_run = run_list.first().unwrap();
+
+                //pull the pr_activity
+                let pr_activity = Activity::open_bin(&pr_run.0);
+
+                //for the latest run sort by latest date ran
+                run_list.sort_by(|(_, _, t1), (_, _, t2)| t2.cmp(t1));
+                let lat_run = run_list.first().unwrap();
+                let lat_activity = Activity::open_bin(&lat_run.0);
             }
             "q" => {
                 break;

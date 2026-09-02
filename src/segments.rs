@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsString,
     fs,
     io::{Read, Write},
     path::PathBuf,
@@ -19,6 +20,7 @@ use utm::{
 #[rkyv(compare(PartialEq), derive(Debug))]
 pub struct Segment {
     name: String,
+    ref_length: u32,      //meters/100
     small_gap: Vec<Gate>, //every 5 readings on ref
     med_gap: Vec<u64>, //every 20 readings on ref usize(as u64 cuz of archive) points to a gate index in small gap
     large_gap: Vec<u64>, //every 60 readings on ref
@@ -98,6 +100,21 @@ impl Segment {
             .position(|s| s.name.as_ref().is_some_and(|n| n == seg_name))
             .unwrap();
 
+        //Determine the distance covered in the segment
+        let ref_length = ref_activity
+            .telemetry
+            .distance_m
+            .iter()
+            .find(|t| {
+                if t.is_some() {
+                    t.as_ref().unwrap() >= &ref_activity.segments[seg_ref_index].distance.unwrap()
+                } else {
+                    false
+                }
+            })
+            .ok_or("segment distance traveled not found")?
+            .ok_or("Segment distance not found")?;
+
         //figure out what part of the data pertains to us
         let seg_start_ind = ref_activity
             .telemetry
@@ -155,6 +172,7 @@ impl Segment {
         }
         Ok(Segment {
             name: seg_name.to_string(),
+            ref_length,
             small_gap,
             med_gap,
             large_gap,
@@ -253,6 +271,51 @@ pub fn list_segments() -> Result<Vec<String>, Box<dyn std::error::Error>> {
         }
     }
     Ok(seg_name_list)
+}
+
+//Go through the activities and list out the ones that have valid data and are somewhat close
+// to the reference distance
+// return (file,seg time, date ran)
+pub fn avail_seg_act(name: &str) -> Result<Vec<(String, u32, u32)>, Box<dyn std::error::Error>> {
+    let segment_ref_dist = Segment::check_seg(name)?.ref_length;
+    let mut fpn_vs_time = Vec::new();
+
+    for entry_res in fs::read_dir(BIN_SAVE_LOC)? {
+        if let Ok(entry) = entry_res {
+            if let Ok(activity) =
+                Activity::open_bin(&entry.file_name().into_string().unwrap().replace(".bin", ""))
+            {
+                //Logic is -- if the segment name matches to the one your looking for and both the t_min_pause == t w pause
+                // basically if the run doesnt contain pauses (avoid where maybe I turned back to grab something)
+                if let Some(segment) = activity.segments.iter().find(|s| {
+                    if s.name.as_ref().is_some_and(|ss| ss == name)
+                        && s.elapsed_time.is_some()
+                        && s.t_min_pause.is_some()
+                        && s.distance.is_some()
+                        && s.start_time.is_some()
+                    {
+                        //Make sure the distance difference is less than 1km
+                        if s.elapsed_time.unwrap() == s.t_min_pause.unwrap()
+                            && (s.distance.unwrap() as i32 - segment_ref_dist as i32).abs() < 100000
+                        {
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                }) {
+                    fpn_vs_time.push((
+                        entry.file_name().into_string().unwrap().replace(".bin", ""),
+                        segment.elapsed_time.unwrap(),
+                        segment.start_time.unwrap(),
+                    ));
+                }
+            }
+        }
+    }
+    return Ok(fpn_vs_time);
 }
 
 //Cannot do vector math directily on lon,lat points as the earth isn't flat
