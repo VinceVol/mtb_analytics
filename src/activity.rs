@@ -28,11 +28,11 @@ pub struct TrackpointDataFrame {
 #[derive(Debug, Archive, Serialize, Deserialize)]
 #[rkyv(compare(PartialEq), derive(Debug))]
 pub struct SegmentRef {
-    pub name: Option<String>,
-    pub start_time: Option<u32>,
-    pub elapsed_time: Option<u32>,      //milliseconds
+    pub name: String,
+    pub start_time: u32,
+    pub elapsed_time: u32,              //milliseconds
     pub distance: Option<u32>,          // 1over100m
-    pub t_min_pause: Option<u32>,       //milliseconds
+    pub t_min_pause: u32,               //milliseconds
     pub start_end_pos: [(f32, f32); 2], //long,lat
 }
 
@@ -134,13 +134,21 @@ impl Activity {
                             _ => {}
                         }
                     }
-                    if name.is_some() && start_time.is_some() && elapsed_time.is_some() {
+                    if name.is_some()
+                        && start_time.is_some()
+                        && elapsed_time.is_some()
+                        && t_min_pause.is_some()
+                        && start_end_pos
+                            .iter()
+                            .find(|(a, b)| *a == 999.0 || *b == 999.0)
+                            .is_none()
+                    {
                         segments.push(SegmentRef {
-                            name,
-                            start_time,
-                            elapsed_time,
+                            name: name.unwrap(),
+                            start_time: start_time.unwrap(),
+                            elapsed_time: elapsed_time.unwrap(),
                             distance,
-                            t_min_pause,
+                            t_min_pause: t_min_pause.unwrap(),
                             start_end_pos,
                         })
                     }

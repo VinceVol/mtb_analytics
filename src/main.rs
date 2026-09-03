@@ -32,7 +32,7 @@ fn main() {
         match segment_to_compare {
             Some(_) => {
                 println!(
-                    "Choose a route \n 'SL' = List available Seg \n 'Lat' PR vs Latest \n 'q' = quit"
+                    "Choose a route \n 'SL' = List available Seg \n 'cho' PR vs chosen \n 'q' = quit"
                 );
             }
             None => {
@@ -56,7 +56,7 @@ fn main() {
                 }
                 println!("-----------------------------------------------------");
             }
-            "lat" => {
+            "cho" => {
                 if segment_to_compare.is_none() {
                     println!("Still need to choose a segment!");
                     continue;
@@ -66,17 +66,21 @@ fn main() {
                 let mut run_list = avail_seg_act(&segment_to_compare.as_ref().unwrap()).unwrap();
 
                 //For the PR run grab the shortest time
-                run_list.sort_by(|(_, t1, _), (_, t2, _)| t1.cmp(t2));
-                dbg!(&run_list);
+                run_list.sort_by(|item1, item2| item1.seg_time.cmp(&item2.seg_time));
                 let pr_run = run_list.first().unwrap();
 
+                println!("-----------------------------------------------------");
                 //pull the pr_activity
-                let pr_activity = Activity::open_bin(&pr_run.0);
+                let pr_activity = Activity::open_bin(&pr_run.file_name);
+                println!("PR SEG: {}", pr_run.label);
 
-                //for the latest run sort by latest date ran
-                run_list.sort_by(|(_, _, t1), (_, _, t2)| t2.cmp(t1));
-                let lat_run = run_list.first().unwrap();
-                let lat_activity = Activity::open_bin(&lat_run.0);
+                //for the chosen run sort by latest date ran
+                run_list.sort_by(|item1, item2| item2.date_ran.cmp(&item1.date_ran));
+                let ans = Select::new("Select which activity to compare to PR:", run_list)
+                    .prompt()
+                    .unwrap();
+                let chosen_activity = Activity::open_bin(&ans.file_name);
+                println!("-----------------------------------------------------");
             }
             "q" => {
                 break;

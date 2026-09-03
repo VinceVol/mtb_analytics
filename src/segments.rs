@@ -1,20 +1,16 @@
+use chrono::{DateTime, Utc};
 use std::{
-    ffi::OsString,
-    fs,
+    fmt, fs,
     io::{Read, Write},
-    path::PathBuf,
 };
 
 use crate::{
     BIN_SAVE_LOC, SEGMENT_LOC,
     activity::{Activity, SegmentRef},
 };
-use nalgebra::{Point1, Point2, RealField, Vector, Vector2};
-use rkyv::{Archive, Deserialize, Serialize, access, deserialize, rancor};
-use utm::{
-    lat_lon_to_zone_number, lat_to_zone_letter, to_utm_wgs84, to_utm_wgs84_no_zone,
-    wsg84_utm_to_lat_lon,
-};
+use nalgebra::{Point2, RealField, Vector2};
+use rkyv::{Archive, Deserialize, Serialize, deserialize, rancor};
+use utm::{lat_lon_to_zone_number, lat_to_zone_letter, to_utm_wgs84_no_zone, wsg84_utm_to_lat_lon};
 
 //Starting with gaps -- basically split gaps at different intervals as I think categorizing
 // turns may be a difficult starting point not worth digging into right at the start
@@ -101,7 +97,7 @@ impl Segment {
         let seg_ref_index = ref_activity
             .segments
             .iter()
-            .position(|s| s.name.as_ref().is_some_and(|n| n == seg_name))
+            .position(|s| s.name == seg_name)
             .unwrap();
 
         //Determine the distance covered in the segment
@@ -129,7 +125,7 @@ impl Segment {
             .iter()
             .position(|t| {
                 if t.is_some() {
-                    t.as_ref().unwrap() >= &ref_activity.segments[seg_ref_index].start_time.unwrap()
+                    t.as_ref().unwrap() >= &ref_activity.segments[seg_ref_index].start_time
                 } else {
                     false
                 }
@@ -142,8 +138,8 @@ impl Segment {
             .position(|t| {
                 if t.is_some() {
                     t.as_ref().unwrap()
-                        >= &(ref_activity.segments[seg_ref_index].start_time.unwrap()
-                            + ref_activity.segments[seg_ref_index].elapsed_time.unwrap() / 1000)
+                        >= &(ref_activity.segments[seg_ref_index].start_time
+                            + ref_activity.segments[seg_ref_index].elapsed_time / 1000)
                 } else {
                     false
                 }
@@ -223,21 +219,12 @@ impl Segment {
                 ) {
                     //Logic is -- if the segment name matches to the one your looking for and both the t_min_pause == t w pause
                     // basically if the run doesnt contain pauses (avoid where maybe I turned back to grab something)
-                    if let Some(ref_segment) = activity.segments.iter().find(|s| {
-                        if s.name.as_ref().is_some_and(|ss| ss == seg_name)
-                            && s.elapsed_time.is_some()
-                            && s.t_min_pause.is_some()
-                        {
-                            if s.elapsed_time.unwrap() == s.t_min_pause.unwrap() {
-                                true
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        }
-                    }) {
-                        file_v_seg.push((entry.file_name(), ref_segment.elapsed_time.unwrap()));
+                    if let Some(ref_segment) = activity
+                        .segments
+                        .iter()
+                        .find(|s| s.name == seg_name && s.elapsed_time == s.t_min_pause)
+                    {
+                        file_v_seg.push((entry.file_name(), ref_segment.elapsed_time));
                     }
                 }
             }
@@ -285,14 +272,9 @@ pub fn list_segments() -> Result<Vec<String>, Box<dyn std::error::Error>> {
             if let Ok(activity) =
                 Activity::open_bin(&entry.file_name().into_string().unwrap().replace(".bin", ""))
             {
-                dbg!(&activity.segments);
                 for seg in activity.segments {
-                    if let Some(seg_name) = seg.name {
-                        if !seg_name_list.contains(&seg_name)
-                            && !seg_name.replace(" ", "").is_empty()
-                        {
-                            seg_name_list.push(seg_name);
-                        }
+                    if !seg_name_list.contains(&seg.name) && !seg.name.replace(" ", "").is_empty() {
+                        seg_name_list.push(seg.name);
                     }
                 }
             }
@@ -301,10 +283,24 @@ pub fn list_segments() -> Result<Vec<String>, Box<dyn std::error::Error>> {
     Ok(seg_name_list)
 }
 
+#[derive(Clone)]
+pub struct SegChoice {
+    pub file_name: String,
+    pub seg_time: u32,
+    pub date_ran: u32,
+    pub label: String,
+}
+
+impl fmt::Display for SegChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.label)
+    }
+}
+
 //Go through the activities and list out the ones that have valid data and are somewhat close
 // to the reference distance
-// return (file,seg time, date ran)
-pub fn avail_seg_act(name: &str) -> Result<Vec<(String, u32, u32)>, Box<dyn std::error::Error>> {
+// return sortable (numbers) and legible (strings) version of (file,seg time, date ran, seg time (legible), date ran(Legible))
+pub fn avail_seg_act(name: &str) -> Result<Vec<SegChoice>, Box<dyn std::error::Error>> {
     let segment_ref = Segment::check_seg(name)?;
     let mut fpn_vs_time = Vec::new();
 
@@ -316,22 +312,34 @@ pub fn avail_seg_act(name: &str) -> Result<Vec<(String, u32, u32)>, Box<dyn std:
                 //Logic is -- if the segment name matches to the one your looking for and both the t_min_pause == t w pause
                 // basically if the run doesnt contain pauses (avoid where maybe I turned back to grab something)
                 if let Some(segment) = activity.segments.iter().find(|s| {
-                    if s.name.as_ref().is_some_and(|ss| ss == name)
-                        && s.elapsed_time.is_some()
-                        && s.t_min_pause.is_some()
-                        && s.start_time.is_some()
-                    {
+                    if s.name == name {
                         //Make sure the start stop pos difference is less than 100m
                         segment_ref.start_stop_equal(&s)
                     } else {
                         false
                     }
                 }) {
-                    fpn_vs_time.push((
-                        entry.file_name().into_string().unwrap().replace(".bin", ""),
-                        segment.elapsed_time.unwrap(),
-                        segment.start_time.unwrap(),
-                    ));
+                    let elapsed_sec = segment.elapsed_time / 1000;
+                    let formatted_option = format!(
+                        "{} -- {} -- {}",
+                        segment.name,
+                        format!(
+                            "{:02}:{:02}:{:02}",
+                            elapsed_sec / 3600,
+                            (elapsed_sec / 60) % 60,
+                            elapsed_sec % 60
+                        ),
+                        DateTime::<Utc>::from_timestamp(segment.start_time.into(), 0)
+                            .unwrap()
+                            .format("%m/%d/%Y")
+                            .to_string()
+                    );
+                    fpn_vs_time.push(SegChoice {
+                        file_name: entry.file_name().into_string().unwrap().replace(".bin", ""),
+                        seg_time: segment.elapsed_time,
+                        date_ran: segment.start_time,
+                        label: formatted_option,
+                    });
                 }
             }
         }
