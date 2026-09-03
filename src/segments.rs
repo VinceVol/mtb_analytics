@@ -5,8 +5,11 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{BIN_SAVE_LOC, SEGMENT_LOC, activity::Activity};
-use nalgebra::{Point2, Vector, Vector2};
+use crate::{
+    BIN_SAVE_LOC, SEGMENT_LOC,
+    activity::{Activity, SegmentRef},
+};
+use nalgebra::{Point1, Point2, RealField, Vector, Vector2};
 use rkyv::{Archive, Deserialize, Serialize, access, deserialize, rancor};
 use utm::{
     lat_lon_to_zone_number, lat_to_zone_letter, to_utm_wgs84, to_utm_wgs84_no_zone,
@@ -24,6 +27,7 @@ pub struct Segment {
     small_gap: Vec<Gate>, //every 5 readings on ref
     med_gap: Vec<u64>, //every 20 readings on ref usize(as u64 cuz of archive) points to a gate index in small gap
     large_gap: Vec<u64>, //every 60 readings on ref
+    start_end_pos: [(f32, f32); 2], //reference to determine whether the segment was finished
                        // uphills: Vec<(gate,gate)>,
                        // downhills: Vec<(gate,gate)>,
 }
@@ -115,6 +119,9 @@ impl Segment {
             .ok_or("segment distance traveled not found")?
             .ok_or("Segment distance not found")?;
 
+        // copy over the start and end pos
+        let start_end_pos = ref_activity.segments[seg_ref_index].start_end_pos;
+
         //figure out what part of the data pertains to us
         let seg_start_ind = ref_activity
             .telemetry
@@ -176,7 +183,27 @@ impl Segment {
             small_gap,
             med_gap,
             large_gap,
+            start_end_pos,
         })
+    }
+
+    //need to be able to compare activities to this ref segment and determine whether they include the full run
+    // determined earlier that distance isn't a good metric because a speed sensor captures much more data
+    // compared to GPS on it's own so distance is not repeatable
+    //
+    // Rather this function is using the start stop loc and using some linear alegra to determine the distance
+    // of those start stop points in the ref to the activity and if that is less than 100 m for both than it should
+    // be a pass
+    //
+    // The reason we need to gatekeep activities is because we don't want our PR to be based on a unfinished segment
+    // run (which returns the shortest time) -- honestly wish garmin wouldn't count an incomplete segment
+    pub fn start_stop_equal(&self, activity_seg: &SegmentRef) -> bool {
+        let utm_ref_ss = points_to_utm(self.start_end_pos).0;
+        let utm_act = points_to_utm(activity_seg.start_end_pos).0;
+
+        //within 100m return true
+        dist_btwn_points(utm_ref_ss[0], utm_act[0]) < 100.0
+            && dist_btwn_points(utm_ref_ss[1], utm_act[1]) < 100.0
     }
     pub fn check_seg(seg_name: &str) -> Result<Segment, Box<dyn std::error::Error>> {
         for entry_res in fs::read_dir(SEGMENT_LOC)? {
@@ -258,6 +285,7 @@ pub fn list_segments() -> Result<Vec<String>, Box<dyn std::error::Error>> {
             if let Ok(activity) =
                 Activity::open_bin(&entry.file_name().into_string().unwrap().replace(".bin", ""))
             {
+                dbg!(&activity.segments);
                 for seg in activity.segments {
                     if let Some(seg_name) = seg.name {
                         if !seg_name_list.contains(&seg_name)
@@ -277,7 +305,7 @@ pub fn list_segments() -> Result<Vec<String>, Box<dyn std::error::Error>> {
 // to the reference distance
 // return (file,seg time, date ran)
 pub fn avail_seg_act(name: &str) -> Result<Vec<(String, u32, u32)>, Box<dyn std::error::Error>> {
-    let segment_ref_dist = Segment::check_seg(name)?.ref_length;
+    let segment_ref = Segment::check_seg(name)?;
     let mut fpn_vs_time = Vec::new();
 
     for entry_res in fs::read_dir(BIN_SAVE_LOC)? {
@@ -291,17 +319,10 @@ pub fn avail_seg_act(name: &str) -> Result<Vec<(String, u32, u32)>, Box<dyn std:
                     if s.name.as_ref().is_some_and(|ss| ss == name)
                         && s.elapsed_time.is_some()
                         && s.t_min_pause.is_some()
-                        && s.distance.is_some()
                         && s.start_time.is_some()
                     {
-                        //Make sure the distance difference is less than 1km
-                        if s.elapsed_time.unwrap() == s.t_min_pause.unwrap()
-                            && (s.distance.unwrap() as i32 - segment_ref_dist as i32).abs() < 100000
-                        {
-                            true
-                        } else {
-                            false
-                        }
+                        //Make sure the start stop pos difference is less than 100m
+                        segment_ref.start_stop_equal(&s)
                     } else {
                         false
                     }
@@ -353,4 +374,18 @@ fn utm_to_points<const N: usize>(
     }
 
     points
+}
+
+fn dist_btwn_points<F>(point1: (F, F), point2: (F, F)) -> F
+where
+    F: RealField + Copy,
+{
+    //get into n_algebra structs
+    let point_1 = Point2::new(point1.0, point1.1);
+    let point_2 = Point2::new(point2.0, point2.1);
+    let point_vec: Vector2<F> = point_2 - point_1;
+
+    let dot = point_vec.dot(&point_vec);
+
+    dot.sqrt()
 }
