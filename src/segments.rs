@@ -8,7 +8,7 @@ use crate::{
     BIN_SAVE_LOC, SEGMENT_LOC,
     activity::{Activity, SegmentRef},
 };
-use nalgebra::{Point2, RealField, Vector2};
+use nalgebra::{Matrix2, Point2, RealField, Vector2};
 use rkyv::{Archive, Deserialize, Serialize, deserialize, rancor};
 use utm::{lat_lon_to_zone_number, lat_to_zone_letter, to_utm_wgs84_no_zone, wsg84_utm_to_lat_lon};
 
@@ -36,9 +36,9 @@ pub struct Segment {
 // segments are run in one direction and that gates are crossed in order
 #[derive(Debug, Archive, Serialize, Deserialize)]
 #[rkyv(compare(PartialEq), derive(Debug))]
-struct Gate {
-    left_pivot: (f32, f32),
-    right_pivot: (f32, f32),
+pub struct Gate {
+    pub left_pivot: (f32, f32),
+    pub right_pivot: (f32, f32),
     // inside_ref: (f32, f32),
     // outside_ref: (f32, f32),
 }
@@ -81,6 +81,35 @@ impl Gate {
             left_pivot: utm_to_points([left_point], [ref_mat[0]])[0],
             right_pivot: utm_to_points([right_point], [ref_mat[0]])[0],
         }
+    }
+    pub fn is_crossed(&self, points: [(f32, f32); 2]) -> bool {
+        //Convert the GPS stuff into math applicable format
+        let (utm_points, _) = points_to_utm(points);
+        let point_a = Point2::new(utm_points[0].0, utm_points[0].1);
+        let point_b = Point2::new(utm_points[1].0, utm_points[1].1);
+
+        let (utm_points_gate, _) = points_to_utm([self.left_pivot, self.right_pivot]);
+        let point_c = Point2::new(utm_points_gate[0].0, utm_points_gate[0].1);
+        let point_d = Point2::new(utm_points_gate[1].0, utm_points_gate[1].1);
+
+        //ab is the activity vector cd is the gate we're checking for an intersection with
+        let vec_ab = point_b - point_a;
+        let vec_cd = point_d - point_c;
+
+        #[inline]
+        fn cross_2d(a: &Vector2<f64>, b: &Vector2<f64>) -> f64 {
+            a.x * b.y - a.y * b.x
+        }
+
+        //if the 2d cross product is 0 then the vectors are parallel (no intersecting the way we want)
+        if cross_2d(&vec_ab, &vec_cd) == 0.0 {
+            return false;
+        }
+
+        let t = cross_2d(&(point_c - point_a), &vec_cd) / cross_2d(&vec_ab, &vec_cd);
+        let u = cross_2d(&(point_c - point_a), &vec_ab) / cross_2d(&vec_ab, &vec_cd);
+
+        t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0
     }
 }
 
