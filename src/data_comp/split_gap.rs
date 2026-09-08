@@ -49,10 +49,17 @@ impl GapVec {
 
                     //check if the gate was crossed by that new line (points)
                     if gate.is_crossed(points) {
-                        split_times.push(Some(
-                            activity_ref.telemetry.timestamps[index].unwrap()
-                                - activity_ref.telemetry.timestamps[0].unwrap(),
-                        ));
+                        if split_times.len() == 0 {
+                            split_times.push(Some(
+                                activity_ref.telemetry.timestamps[index].unwrap()
+                                    - activity_ref.telemetry.timestamps[0].unwrap(),
+                            ));
+                        } else {
+                            split_times.push(Some(
+                                activity_ref.telemetry.timestamps[index].unwrap()
+                                    - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
+                            ));
+                        }
                         gate_gps_index.push(Some(gps_data.clone())); //needed for visuals
                         gps_data.clear();
                         last_suc_ind = index;

@@ -105,7 +105,7 @@ fn main() {
                         .segmented_activity(&segment_to_compare.as_ref().unwrap())
                         .unwrap(),
                 );
-                let gap_track = GapTrack::compare_gaps(chosen_gate_vec, pr_gate_vec).unwrap();
+                let gap_track = GapTrack::compare_gaps(pr_gate_vec, chosen_gate_vec).unwrap();
                 // dbg!(&gap_track.labels);
 
                 // Pass labels into geojson generator
@@ -114,7 +114,7 @@ fn main() {
                     "Split Gap (s)",
                     Some(&gap_track.labels),
                     Some(&gates),
-                    Some((-30.0, 30.0)),
+                    None,
                 );
 
                 let output_file = Path::new("test_map.html");
