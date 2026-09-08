@@ -71,9 +71,9 @@ impl Gate {
         let full_norm = full_gate.normalize() * length_m / 2.0;
 
         let full_left = point_b - full_norm;
-        let full_right = point_b - full_norm;
+        let full_right = point_b + full_norm;
 
-        let left_point = (full_left.x, full_right.y);
+        let left_point = (full_left.x, full_left.y);
         let right_point = (full_right.x, full_right.y);
 
         //They're both using the same zone and letter because they should be very close to one another
@@ -101,6 +101,12 @@ impl Gate {
             a.x * b.y - a.y * b.x
         }
 
+        // println!(
+        //     "Points [a,b,c,d] = [{},{},{},{}]",
+        //     point_a, point_b, point_c, point_d
+        // );
+        // println!("Vector [ab,cd] = [{},{}]", vec_ab, vec_cd);
+        // println!("cross_2d = {}", cross_2d(&vec_ab, &vec_cd));
         //if the 2d cross product is 0 then the vectors are parallel (no intersecting the way we want)
         if cross_2d(&vec_ab, &vec_cd) == 0.0 {
             return false;

@@ -10,7 +10,7 @@ pub struct GapTrack {
 
 #[derive(Debug)]
 pub struct GapVec {
-    gap_vec: Vec<Option<u32>>,
+    pub gap_vec: Vec<Option<u32>>,
     gate_gps_index: Vec<Option<Vec<(f32, f32)>>>, //Need to store the telemetry index when crossing the gate
 }
 
@@ -27,12 +27,7 @@ impl GapVec {
             //track whether data point was saved
             success = false;
             for (index, long) in activity_ref.telemetry.longitude.iter().enumerate() {
-                //add data to gps coord vec
                 let lat = activity_ref.telemetry.latitude[index];
-                if lat.is_some() && long.is_some() {
-                    gps_data.push((long.unwrap(), lat.unwrap()));
-                }
-
                 //dont go back through the front end of activity telemetry every time you
                 // cycle through to find the intersection of a gate
                 if index == 0 || index <= last_suc_ind {
@@ -40,6 +35,12 @@ impl GapVec {
                     pp_lat = lat;
                     continue;
                 }
+
+                //add data to gps coord vec
+                if lat.is_some() && long.is_some() {
+                    gps_data.push((long.unwrap(), lat.unwrap()));
+                }
+
                 if pp_long.is_some() && pp_lat.is_some() && long.is_some() && lat.is_some() {
                     //construct the line we want to check going through the gate
                     let current_point = (long.unwrap(), lat.unwrap());
@@ -48,7 +49,10 @@ impl GapVec {
 
                     //check if the gate was crossed by that new line (points)
                     if gate.is_crossed(points) {
-                        split_times.push(activity_ref.telemetry.timestamps[index]); //add the time so we can compare later
+                        split_times.push(Some(
+                            activity_ref.telemetry.timestamps[index].unwrap()
+                                - activity_ref.telemetry.timestamps[0].unwrap(),
+                        ));
                         gate_gps_index.push(Some(gps_data.clone())); //needed for visuals
                         gps_data.clear();
                         last_suc_ind = index;
@@ -88,7 +92,9 @@ impl GapTrack {
 
             //compare the difference if they both have a number to show for it
             if gap_time_1.is_some() && gap_time_2.is_some() {
-                differences.push(Some(gap_time_2.unwrap() - gap_time_1.unwrap()));
+                differences.push(Some(
+                    gap_time_2.unwrap() as i32 - gap_time_1.unwrap() as i32,
+                ));
             } else {
                 differences.push(None);
             }
@@ -103,12 +109,12 @@ impl GapTrack {
             if tele_data.is_some() {
                 for (tele_index, (long, lat)) in tele_data.as_mut().unwrap().iter().enumerate() {
                     if tele_index == 0 {
-                        labels.push((*long, *lat, differences[index].unwrap_or(0).to_string()));
+                        labels.push((*lat, *long, differences[index].unwrap_or(0).to_string()));
                     }
                     //show a difference of 0 if that difference didnt exist
                     // kind of a flaw for now but whatever. Eventually I should
                     // print missing data purple or something TODO
-                    data.push((*long, *lat, differences[index].unwrap_or(0) as f32));
+                    data.push((*lat, *long, differences[index].unwrap_or(0) as f32));
                 }
             }
         }

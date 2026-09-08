@@ -92,27 +92,34 @@ fn main() {
 
                 //Run actual comparison
                 //Starting with just one gap size for now
-                let gates = seg_ref.small_gap;
-                let pr_gate_vec = GapVec::new(&gates, &pr_activity);
-                let chosen_gate_vec = GapVec::new(&gates, &chosen_activity);
-                dbg!(&pr_gate_vec);
-                dbg!(&chosen_gate_vec);
+                let gates = seg_ref.large_gap;
+                let pr_gate_vec = GapVec::new(
+                    &gates,
+                    &pr_activity
+                        .segmented_activity(&segment_to_compare.as_ref().unwrap())
+                        .unwrap(),
+                );
+                let chosen_gate_vec = GapVec::new(
+                    &gates,
+                    &chosen_activity
+                        .segmented_activity(&segment_to_compare.as_ref().unwrap())
+                        .unwrap(),
+                );
                 let gap_track = GapTrack::compare_gaps(chosen_gate_vec, pr_gate_vec).unwrap();
-                dbg!(&gap_track);
-                let var_name = "speed";
+                // dbg!(&gap_track.labels);
 
                 // Pass labels into geojson generator
                 let geojson = generate_track_geojson(
                     &gap_track.data,
-                    var_name,
+                    "Split Gap (s)",
                     Some(&gap_track.labels),
-                    None,
+                    Some((-30.0, 30.0)),
                 );
 
                 let output_file = Path::new("test_map.html");
                 println!("Writing HTML map to: {:?}", output_file);
 
-                let result = open_map_in_browser(&geojson, var_name, output_file);
+                let result = open_map_in_browser(&geojson, "Split Gap (s)", output_file);
                 assert!(result.is_ok(), "Failed to create or open map file");
                 assert!(output_file.exists(), "HTML map file was not saved to disk");
             }

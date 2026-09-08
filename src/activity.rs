@@ -8,10 +8,10 @@ use fit::{Fit, Value};
 
 use rkyv::{Archive, Deserialize, Serialize, deserialize, rancor};
 
-use crate::{BIN_SAVE_LOC, FIT_LOC};
+use crate::{BIN_SAVE_LOC, FIT_LOC, SEGMENT_LOC};
 
 // Dense time-series: stored in contiguous memory (Structure of Arrays)
-#[derive(Debug, Archive, Serialize, Deserialize)]
+#[derive(Debug, Archive, Serialize, Deserialize, Clone)]
 #[rkyv(compare(PartialEq), derive(Debug))]
 pub struct TrackpointDataFrame {
     pub timestamps: Vec<Option<u32>>, // Unix timestamps (seconds)
@@ -21,11 +21,10 @@ pub struct TrackpointDataFrame {
     pub latitude: Vec<Option<f32>>,   // Decimal degrees
     pub longitude: Vec<Option<f32>>,  // Decimal degrees
     pub altitude_m: Vec<Option<u32>>, // Meters
-    pub slope_pct: Vec<Option<f32>>,  // Derived slope %
 }
 
 // Sparse event metadata
-#[derive(Debug, Archive, Serialize, Deserialize)]
+#[derive(Debug, Archive, Serialize, Deserialize, Clone)]
 #[rkyv(compare(PartialEq), derive(Debug))]
 pub struct SegmentRef {
     pub name: String,
@@ -36,7 +35,7 @@ pub struct SegmentRef {
     pub start_end_pos: [(f32, f32); 2], //long,lat
 }
 
-#[derive(Debug, Archive, Serialize, Deserialize)]
+#[derive(Debug, Archive, Serialize, Deserialize, Clone)]
 #[rkyv(compare(PartialEq), derive(Debug))]
 pub struct Activity {
     pub metadata_id: String,
@@ -83,7 +82,6 @@ impl Activity {
             latitude: Vec::new(),
             longitude: Vec::new(),
             altitude_m: Vec::new(),
-            slope_pct: Vec::new(),
         };
         //segment data
         let mut segments: Vec<SegmentRef> = Vec::new();
@@ -240,6 +238,66 @@ impl Activity {
         let archived = rkyv::access::<ArchivedActivity, rancor::Error>(&bytes[..]).unwrap();
         let activity: Activity = deserialize::<Activity, rancor::Error>(archived)?;
         Ok(activity)
+    }
+
+    //Basically we want to grab an activity file of just the raw activity itself so we can interpret just that information
+    // when doing comparisons this is just grabbing the information from the first matched segment in .segments that
+    // matches the segment name and then using the start and elapsed time to determine what data to keep
+    pub fn segmented_activity(
+        self,
+        seg_name: &String,
+    ) -> Result<Activity, Box<dyn std::error::Error>> {
+        let mut seg_index: Option<usize> = None;
+        let mut start_time: Option<u32> = None;
+        let mut elapsed_time: Option<u32> = None;
+        for (index, seg) in self.segments.iter().enumerate() {
+            if &seg.name == seg_name {
+                seg_index = Some(index);
+                start_time = Some(seg.start_time);
+                elapsed_time = Some(seg.elapsed_time);
+            }
+        }
+        if seg_index.is_none() {
+            return Err("Segment doesn't exist in activity!".into());
+        }
+
+        let mut segmented_activity = self.clone();
+
+        let mut sub_length: usize = 0;
+        for (i, time) in self.telemetry.timestamps.iter().enumerate() {
+            if time.unwrap() > (start_time.unwrap() + elapsed_time.unwrap() / 1000)
+                || time.unwrap() < start_time.unwrap()
+            {
+                segmented_activity
+                    .telemetry
+                    .timestamps
+                    .remove(i - sub_length);
+                segmented_activity
+                    .telemetry
+                    .distance_m
+                    .remove(i - sub_length);
+                segmented_activity
+                    .telemetry
+                    .speed_kmh
+                    .remove(i - sub_length);
+                segmented_activity
+                    .telemetry
+                    .heart_rate
+                    .remove(i - sub_length);
+                segmented_activity.telemetry.latitude.remove(i - sub_length);
+                segmented_activity
+                    .telemetry
+                    .longitude
+                    .remove(i - sub_length);
+                segmented_activity
+                    .telemetry
+                    .altitude_m
+                    .remove(i - sub_length);
+                sub_length += 1;
+            }
+        }
+
+        return Ok(segmented_activity);
     }
 }
 
