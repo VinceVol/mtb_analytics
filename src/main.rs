@@ -113,6 +113,7 @@ fn main() {
                     &gap_track.data,
                     "Split Gap (s)",
                     Some(&gap_track.labels),
+                    Some(&gates),
                     Some((-30.0, 30.0)),
                 );
 

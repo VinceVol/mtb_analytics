@@ -197,7 +197,7 @@ impl Segment {
 
                 //If any of the coordinates didn't exist (yielding the initial 420.0) then skip
                 if !three_points.iter().any(|(x, y)| *x == 420.0 || *y == 420.0) {
-                    let gate = Gate::new(three_points, 4.0);
+                    let gate = Gate::new(three_points, 15.0);
                     if (i as f32 / 20.0) == (i as f32 / 20.0) as usize as f32 {
                         med_gap.push(gate.clone());
                     }
