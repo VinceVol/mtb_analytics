@@ -1,4 +1,4 @@
 //Top of file tree for analytics
 
-mod split_gap;
-mod visuals;
+pub mod split_gap;
+pub mod visuals;

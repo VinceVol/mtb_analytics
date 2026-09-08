@@ -35,9 +35,9 @@ fn value_to_hex_color(value: f32, min_val: f32, max_val: f32) -> String {
 /// - `labels`: Optional slice of tuples `(lat, lon, label_string)` for custom map pins
 /// - `custom_min_max`: Optional manually specified `(min, max)` bounds
 pub fn generate_track_geojson(
-    data: &[(f64, f64, f32)],
+    data: &[(f32, f32, f32)],
     variable_name: &str,
-    labels: Option<&[(f64, f64, String)]>,
+    labels: Option<&[(f32, f32, String)]>,
     custom_min_max: Option<(f32, f32)>,
 ) -> FeatureCollection {
     if data.is_empty() {
@@ -61,7 +61,10 @@ pub fn generate_track_geojson(
         let (lat1, lon1, _) = window[0];
         let (lat2, lon2, val2) = window[1];
 
-        let line_coords = vec![vec![lon1, lat1], vec![lon2, lat2]];
+        let line_coords = vec![
+            vec![lon1 as f64, lat1 as f64],
+            vec![lon2 as f64, lat2 as f64],
+        ];
 
         let geometry = Geometry::new(GeometryValue::new_line_string(line_coords));
         let mut properties = Map::new();
@@ -82,7 +85,7 @@ pub fn generate_track_geojson(
     // 2. Build Point features for text markers/labels
     if let Some(label_list) = labels {
         for (lat, lon, text) in label_list {
-            let point_coords = vec![*lon, *lat];
+            let point_coords = vec![*lon as f64, *lat as f64];
             let geometry = Geometry::new(GeometryValue::new_point(point_coords));
 
             let mut properties = Map::new();

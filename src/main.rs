@@ -1,9 +1,13 @@
-use std::io;
+use std::{io, path::Path};
 
 use inquire::Select;
 
 use crate::{
     activity::Activity,
+    data_comp::{
+        split_gap::{GapTrack, GapVec},
+        visuals::{generate_track_geojson, open_map_in_browser},
+    },
     segments::{Segment, avail_seg_act, list_segments},
 };
 
@@ -61,6 +65,10 @@ fn main() {
                     println!("Still need to choose a segment!");
                     continue;
                 }
+                //Pull the gate data for the chosen segment
+                let seg_ref = Segment::check_seg(&segment_to_compare.as_ref().unwrap())
+                    .expect("issues opening segment");
+
                 //Generate list of runs that did the segment without pausing that come within
                 // 0.5km of the ref segment
                 let mut run_list = avail_seg_act(&segment_to_compare.as_ref().unwrap()).unwrap();
@@ -71,7 +79,7 @@ fn main() {
 
                 println!("-----------------------------------------------------");
                 //pull the pr_activity
-                let pr_activity = Activity::open_bin(&pr_run.file_name);
+                let pr_activity = Activity::open_bin(&pr_run.file_name).unwrap();
                 println!("PR SEG: {}", pr_run.label);
 
                 //for the chosen run sort by latest date ran
@@ -79,8 +87,34 @@ fn main() {
                 let ans = Select::new("Select which activity to compare to PR:", run_list)
                     .prompt()
                     .unwrap();
-                let chosen_activity = Activity::open_bin(&ans.file_name);
+                let chosen_activity = Activity::open_bin(&ans.file_name).unwrap();
                 println!("-----------------------------------------------------");
+
+                //Run actual comparison
+                //Starting with just one gap size for now
+                let gates = seg_ref.small_gap;
+                let pr_gate_vec = GapVec::new(&gates, &pr_activity);
+                let chosen_gate_vec = GapVec::new(&gates, &chosen_activity);
+                dbg!(&pr_gate_vec);
+                dbg!(&chosen_gate_vec);
+                let gap_track = GapTrack::compare_gaps(chosen_gate_vec, pr_gate_vec).unwrap();
+                dbg!(&gap_track);
+                let var_name = "speed";
+
+                // Pass labels into geojson generator
+                let geojson = generate_track_geojson(
+                    &gap_track.data,
+                    var_name,
+                    Some(&gap_track.labels),
+                    None,
+                );
+
+                let output_file = Path::new("test_map.html");
+                println!("Writing HTML map to: {:?}", output_file);
+
+                let result = open_map_in_browser(&geojson, var_name, output_file);
+                assert!(result.is_ok(), "Failed to create or open map file");
+                assert!(output_file.exists(), "HTML map file was not saved to disk");
             }
             "q" => {
                 break;

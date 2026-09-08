@@ -19,13 +19,13 @@ use utm::{lat_lon_to_zone_number, lat_to_zone_letter, to_utm_wgs84_no_zone, wsg8
 #[rkyv(compare(PartialEq), derive(Debug))]
 pub struct Segment {
     name: String,
-    ref_length: u32,      //meters/100
-    small_gap: Vec<Gate>, //every 5 readings on ref
-    med_gap: Vec<u64>, //every 20 readings on ref usize(as u64 cuz of archive) points to a gate index in small gap
-    large_gap: Vec<u64>, //every 60 readings on ref
+    ref_length: u32,          //meters/100
+    pub small_gap: Vec<Gate>, //every 5 readings on ref
+    pub med_gap: Vec<Gate>, //every 20 readings on ref usize(as u64 cuz of archive) points to a gate index in small gap
+    pub large_gap: Vec<Gate>, //every 60 readings on ref
     start_end_pos: [(f32, f32); 2], //reference to determine whether the segment was finished
-                       // uphills: Vec<(gate,gate)>,
-                       // downhills: Vec<(gate,gate)>,
+                            // uphills: Vec<(gate,gate)>,
+                            // downhills: Vec<(gate,gate)>,
 }
 
 // using gate as a method of capturing when the rider goes through a part on the path.
@@ -34,7 +34,7 @@ pub struct Segment {
 // ---------------
 // for now I dont think I actually need a inside and outside ref given that
 // segments are run in one direction and that gates are crossed in order
-#[derive(Debug, Archive, Serialize, Deserialize)]
+#[derive(Debug, Archive, Serialize, Deserialize, Clone, Copy)]
 #[rkyv(compare(PartialEq), derive(Debug))]
 pub struct Gate {
     pub left_pivot: (f32, f32),
@@ -118,8 +118,8 @@ impl Segment {
         //start with some blank vectors to fill
 
         let mut small_gap: Vec<Gate> = Vec::new(); //every 5 readings on ref
-        let mut med_gap: Vec<u64> = Vec::new(); //every 20 readings on ref
-        let mut large_gap: Vec<u64> = Vec::new(); //every 60 readings on ref
+        let mut med_gap: Vec<Gate> = Vec::new(); //every 20 readings on ref
+        let mut large_gap: Vec<Gate> = Vec::new(); //every 60 readings on ref
 
         // dbg!(&ref_activity.segments);
         //choose the first occurence of the segment within the activity
@@ -193,10 +193,10 @@ impl Segment {
                 if !three_points.iter().any(|(x, y)| *x == 420.0 || *y == 420.0) {
                     let gate = Gate::new(three_points, 4.0);
                     if (i as f32 / 20.0) == (i as f32 / 20.0) as usize as f32 {
-                        med_gap.push(small_gap.len() as u64);
+                        med_gap.push(gate.clone());
                     }
                     if (i as f32 / 60.0) == (i as f32 / 60.0) as usize as f32 {
-                        large_gap.push(small_gap.len() as u64);
+                        large_gap.push(gate.clone());
                     }
                     small_gap.push(gate);
                 }

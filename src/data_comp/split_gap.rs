@@ -2,25 +2,27 @@
 
 use crate::{activity::Activity, segments::Gate};
 
+#[derive(Debug)]
 pub struct GapTrack {
-    data: Vec<(f32, f32, f32)>,
-    labels: Vec<(f32, f32, String)>,
+    pub data: Vec<(f32, f32, f32)>,
+    pub labels: Vec<(f32, f32, String)>,
 }
 
+#[derive(Debug)]
 pub struct GapVec {
     gap_vec: Vec<Option<u32>>,
     gate_gps_index: Vec<Option<Vec<(f32, f32)>>>, //Need to store the telemetry index when crossing the gate
 }
 
 impl GapVec {
-    pub fn new(gates: Vec<Gate>, activity_ref: &Activity) -> Self {
+    pub fn new(gates: &Vec<Gate>, activity_ref: &Activity) -> Self {
         let mut split_times: Vec<Option<u32>> = Vec::new();
         let mut gate_gps_index: Vec<Option<Vec<(f32, f32)>>> = Vec::new();
         let mut pp_long = None; //previous longitude
         let mut pp_lat = None; //previous latitude
         let mut last_suc_ind: usize = 0; //track the index you left off at
         let mut gps_data: Vec<(f32, f32)> = Vec::new(); //dump telemetry data in here
-        let mut success = false; //Track whether intersection was found
+        let mut success; //Track whether intersection was found
         for gate in gates {
             //track whether data point was saved
             success = false;
@@ -71,7 +73,7 @@ impl GapVec {
 impl GapTrack {
     //comparing gap 2 - gap 1
     //returning gap 2 track
-    fn compare_gaps(
+    pub fn compare_gaps(
         gap_vec_1: GapVec,
         mut gap_vec_2: GapVec,
     ) -> Result<GapTrack, Box<dyn std::error::Error>> {
