@@ -20,54 +20,59 @@ impl GapVec {
         let mut gate_gps_index: Vec<Option<Vec<(f32, f32)>>> = Vec::new();
         let mut pp_long = None; //previous longitude
         let mut pp_lat = None; //previous latitude
+        let mut long = None;
+        let mut lat = None;
         let mut last_suc_ind: usize = 0; //track the index you left off at
-        let mut gps_data: Vec<(f32, f32)> = Vec::new(); //dump telemetry data in here
         let mut success; //Track whether intersection was found
         for (gate_ind, gate) in gates.iter().enumerate() {
             //track whether data point was saved
             success = false;
 
+            let mut gps_data: Vec<(f32, f32)> = Vec::new(); //dump telemetry data in here
             //As a backup for missed gates append the distance from gate to choose the point w/
             // min distance if the gate was never crossed
             let mut min_dist = Vec::new();
-            for (index, long) in activity_ref.telemetry.longitude.iter().enumerate() {
-                let lat = activity_ref.telemetry.latitude[index];
+            for index in 0..activity_ref.telemetry.longitude.len() {
                 //dont go back through the front end of activity telemetry every time you
                 // cycle through to find the intersection of a gate
-                if index == 0 || index <= last_suc_ind {
-                    pp_long = *long;
-                    pp_lat = lat;
+                if index <= last_suc_ind {
                     continue;
                 }
+                if long.is_some() && lat.is_some() {
+                    pp_long = long;
+                    pp_lat = lat;
+                }
+                long = activity_ref.telemetry.longitude[index];
+                lat = activity_ref.telemetry.latitude[index];
 
                 //add data to gps coord vec
-                if lat.is_some() && long.is_some() {
-                    gps_data.push((long.unwrap(), lat.unwrap()));
-                }
+                if let (Some(l_lon), Some(l_lat)) = (long, lat) {
+                    gps_data.push((l_lon, l_lat));
 
-                if pp_long.is_some() && pp_lat.is_some() && long.is_some() && lat.is_some() {
-                    //construct the line we want to check going through the gate
-                    let current_point = (long.unwrap(), lat.unwrap());
-                    let prev_point = (pp_long.unwrap(), pp_lat.unwrap());
-                    let points = [prev_point, current_point];
+                    if let (Some(p_lon), Some(p_lat)) = (pp_long, pp_lat) {
+                        //construct the line we want to check going through the gate
+                        let current_point = (l_lon, l_lat);
+                        let prev_point = (p_lon, p_lat);
+                        let points = [prev_point, current_point];
 
-                    //check if the gate was crossed by that new line (points)
-                    if gate.is_crossed(points) {
-                        split_times.push(Some(
-                            activity_ref.telemetry.timestamps[index].unwrap()
-                                - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
-                        ));
-                        gate_gps_index.push(Some(gps_data.clone())); //needed for visuals
-                        gps_data.clear();
-                        last_suc_ind = index;
-                        success = true;
-                        break;
-                    } else {
-                        min_dist.push((
-                            gate.dist_to_center(long.unwrap(), lat.unwrap()),
-                            index,
-                            gps_data.len(),
-                        ));
+                        //check if the gate was crossed by that new line (points)
+                        if gate.is_crossed(points) {
+                            split_times.push(Some(
+                                activity_ref.telemetry.timestamps[index].unwrap()
+                                    - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
+                            ));
+                            gate_gps_index.push(Some(gps_data.clone())); //needed for visuals
+                            gps_data.clear();
+                            last_suc_ind = index;
+                            success = true;
+                            break;
+                        } else {
+                            min_dist.push((
+                                gate.dist_to_center(l_lon, l_lat),
+                                index,
+                                gps_data.len(),
+                            ));
+                        }
                     }
                 }
             }

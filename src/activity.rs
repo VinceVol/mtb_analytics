@@ -244,7 +244,7 @@ impl Activity {
     // when doing comparisons this is just grabbing the information from the first matched segment in .segments that
     // matches the segment name and then using the start and elapsed time to determine what data to keep
     pub fn segmented_activity(
-        self,
+        &self,
         seg_name: &String,
     ) -> Result<Activity, Box<dyn std::error::Error>> {
         let mut seg_index: Option<usize> = None;

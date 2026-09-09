@@ -168,6 +168,7 @@ pub fn open_map_in_browser(
     geojson: &FeatureCollection,
     variable_name: &str,
     output_path: &Path,
+    map_title: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let json_str = geojson.to_string();
 
@@ -175,7 +176,7 @@ pub fn open_map_in_browser(
         r#"<!DOCTYPE html>
 <html>
 <head>
-    <title>GPS Map Track</title>
+    <title>{}</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer-when-downgrade">
@@ -263,6 +264,7 @@ pub fn open_map_in_browser(
     </script>
 </body>
 </html>"#,
+        map_title,
         json_str = json_str,
         var_name = variable_name
     );
@@ -274,6 +276,7 @@ pub fn open_map_in_browser(
 
     Ok(())
 }
+
 #[cfg(test)]
 mod d_test {
     use super::*;
@@ -322,7 +325,7 @@ mod d_test {
         );
 
         let output_file = Path::new("test_map.html");
-        let result = open_map_in_browser(&geojson, var_name, output_file);
+        let result = open_map_in_browser(&geojson, var_name, output_file, "TESTMAP");
 
         assert!(result.is_ok(), "Failed to create or open map file");
         assert!(output_file.exists(), "HTML map file was not saved to disk");

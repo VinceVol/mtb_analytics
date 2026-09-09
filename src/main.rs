@@ -94,38 +94,65 @@ fn main() {
                 //Run actual comparison
                 //Starting with just one gap size for now
                 println!("|PR Gate Analysis|");
-                let gates = seg_ref.large_gap;
-                let pr_gate_vec = GapVec::new(
-                    &gates,
-                    &pr_activity
-                        .segmented_activity(&segment_to_compare.as_ref().unwrap())
-                        .unwrap(),
-                );
-                println!("|Chosen Gate Analysis|");
-                let chosen_gate_vec = GapVec::new(
-                    &gates,
-                    &chosen_activity
-                        .segmented_activity(&segment_to_compare.as_ref().unwrap())
-                        .unwrap(),
-                );
-                let gap_track = GapTrack::compare_gaps(pr_gate_vec, chosen_gate_vec).unwrap();
-                // dbg!(&gap_track.labels);
+                let gates = [seg_ref.small_gap, seg_ref.med_gap, seg_ref.large_gap];
 
-                // Pass labels into geojson generator
-                let geojson = generate_track_geojson(
-                    &gap_track.data,
-                    "Split Gap (s)",
-                    Some(&gap_track.labels),
-                    Some(&gates),
-                    Some((-5.0, 10.0)),
-                );
+                for (graph_ind, gate) in gates.iter().enumerate() {
+                    let pr_gate_vec = GapVec::new(
+                        &gate,
+                        &pr_activity
+                            .segmented_activity(&segment_to_compare.as_ref().unwrap())
+                            .unwrap(),
+                    );
+                    println!("|Chosen Gate Analysis|");
+                    let chosen_gate_vec = GapVec::new(
+                        &gate,
+                        &chosen_activity
+                            .segmented_activity(&segment_to_compare.as_ref().unwrap())
+                            .unwrap(),
+                    );
+                    let gap_track = GapTrack::compare_gaps(pr_gate_vec, chosen_gate_vec).unwrap();
+                    // dbg!(&gap_track.labels);
 
-                let output_file = Path::new("test_map.html");
-                println!("Writing HTML map to: {:?}", output_file);
+                    // Pass labels into geojson generator
+                    let geojson = generate_track_geojson(
+                        &gap_track.data,
+                        "Split Gap (s)",
+                        None, //Some(&gap_track.labels),
+                        None, //Some(&gate),
+                        None, // Some((-5.0, 10.0)),
+                    );
 
-                let result = open_map_in_browser(&geojson, "Split Gap (s)", output_file);
-                assert!(result.is_ok(), "Failed to create or open map file");
-                assert!(output_file.exists(), "HTML map file was not saved to disk");
+                    let output_file = Path::new("test_map.html");
+                    println!("Writing HTML map to: {:?}", output_file);
+
+                    match graph_ind {
+                        0 => {
+                            let _result = open_map_in_browser(
+                                &geojson,
+                                "Split Gap (s)",
+                                output_file,
+                                "Small Gap",
+                            );
+                        }
+                        1 => {
+                            let _result = open_map_in_browser(
+                                &geojson,
+                                "Split Gap (s)",
+                                output_file,
+                                "Med Gap",
+                            );
+                        }
+                        2 => {
+                            let _result = open_map_in_browser(
+                                &geojson,
+                                "Split Gap (s)",
+                                output_file,
+                                "Large Gap",
+                            );
+                        }
+                        _ => (),
+                    }
+                }
             }
             "q" => {
                 break;
