@@ -1,6 +1,6 @@
 //Common +/- Green red
 
-use crate::{activity::Activity, segments::Gate};
+use crate::{activity::Activity, gate::Gate};
 
 #[derive(Debug)]
 pub struct GapTrack {
@@ -23,7 +23,7 @@ impl GapVec {
         let mut last_suc_ind: usize = 0; //track the index you left off at
         let mut gps_data: Vec<(f32, f32)> = Vec::new(); //dump telemetry data in here
         let mut success; //Track whether intersection was found
-        for gate in gates {
+        for (gate_ind, gate) in gates.iter().enumerate() {
             //track whether data point was saved
             success = false;
             for (index, long) in activity_ref.telemetry.longitude.iter().enumerate() {
@@ -69,6 +69,7 @@ impl GapVec {
                 }
             }
             if !success {
+                println!("Gate #{} was never crossed", gate_ind);
                 split_times.push(None);
                 gate_gps_index.push(None);
             }

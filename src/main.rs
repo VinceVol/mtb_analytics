@@ -13,6 +13,7 @@ use crate::{
 
 mod activity;
 mod data_comp;
+mod gate;
 mod segments;
 
 pub static FIT_LOC: &'static str = "./Data/";
@@ -92,6 +93,7 @@ fn main() {
 
                 //Run actual comparison
                 //Starting with just one gap size for now
+                println!("|PR Gate Analysis|");
                 let gates = seg_ref.large_gap;
                 let pr_gate_vec = GapVec::new(
                     &gates,
@@ -99,6 +101,7 @@ fn main() {
                         .segmented_activity(&segment_to_compare.as_ref().unwrap())
                         .unwrap(),
                 );
+                println!("|Chosen Gate Analysis|");
                 let chosen_gate_vec = GapVec::new(
                     &gates,
                     &chosen_activity
@@ -114,7 +117,7 @@ fn main() {
                     "Split Gap (s)",
                     Some(&gap_track.labels),
                     Some(&gates),
-                    None,
+                    Some((-5.0, 10.0)),
                 );
 
                 let output_file = Path::new("test_map.html");

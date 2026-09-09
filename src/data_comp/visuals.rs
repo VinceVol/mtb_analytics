@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use crate::segments::Gate;
+use crate::gate::Gate;
 
 /// Interpolates linearly between `a` and `b` by fraction `t`
 fn lerp(a: f32, b: f32, t: f32) -> f32 {

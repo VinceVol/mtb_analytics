@@ -8,7 +8,7 @@ use fit::{Fit, Value};
 
 use rkyv::{Archive, Deserialize, Serialize, deserialize, rancor};
 
-use crate::{BIN_SAVE_LOC, FIT_LOC, SEGMENT_LOC};
+use crate::{BIN_SAVE_LOC, FIT_LOC};
 
 // Dense time-series: stored in contiguous memory (Structure of Arrays)
 #[derive(Debug, Archive, Serialize, Deserialize, Clone)]
