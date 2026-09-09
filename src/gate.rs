@@ -53,6 +53,13 @@ impl Gate {
             right_pivot: utm_to_points([right_point], [ref_mat[0]])[0],
         }
     }
+    pub fn dist_to_center(&self, p_long: f32, p_lat: f32) -> f32 {
+        let lon_center = self.left_pivot.0 + (self.right_pivot.0 - self.left_pivot.0) / 2.0;
+        let lat_center = self.left_pivot.1 + (self.right_pivot.1 - self.left_pivot.1) / 2.0;
+        let points = [(lon_center, lat_center), (p_long, p_lat)];
+        let [center_point_utm, comp_point_utm] = points_to_utm(points).0;
+        return dist_btwn_points(center_point_utm, comp_point_utm) as f32;
+    }
     pub fn is_crossed(&self, points: [(f32, f32); 2]) -> bool {
         //Convert the GPS stuff into math applicable format
         let (utm_points, _) = points_to_utm(points);

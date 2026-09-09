@@ -26,6 +26,10 @@ impl GapVec {
         for (gate_ind, gate) in gates.iter().enumerate() {
             //track whether data point was saved
             success = false;
+
+            //As a backup for missed gates append the distance from gate to choose the point w/
+            // min distance if the gate was never crossed
+            let mut min_dist = Vec::new();
             for (index, long) in activity_ref.telemetry.longitude.iter().enumerate() {
                 let lat = activity_ref.telemetry.latitude[index];
                 //dont go back through the front end of activity telemetry every time you
@@ -49,29 +53,43 @@ impl GapVec {
 
                     //check if the gate was crossed by that new line (points)
                     if gate.is_crossed(points) {
-                        if split_times.len() == 0 {
-                            split_times.push(Some(
-                                activity_ref.telemetry.timestamps[index].unwrap()
-                                    - activity_ref.telemetry.timestamps[0].unwrap(),
-                            ));
-                        } else {
-                            split_times.push(Some(
-                                activity_ref.telemetry.timestamps[index].unwrap()
-                                    - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
-                            ));
-                        }
+                        split_times.push(Some(
+                            activity_ref.telemetry.timestamps[index].unwrap()
+                                - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
+                        ));
                         gate_gps_index.push(Some(gps_data.clone())); //needed for visuals
                         gps_data.clear();
                         last_suc_ind = index;
                         success = true;
                         break;
+                    } else {
+                        min_dist.push((
+                            gate.dist_to_center(long.unwrap(), lat.unwrap()),
+                            index,
+                            gps_data.len(),
+                        ));
                     }
                 }
             }
             if !success {
-                println!("Gate #{} was never crossed", gate_ind);
-                split_times.push(None);
-                gate_gps_index.push(None);
+                //gps_data index is there to tell us what to save up to since we appended
+                // a bunch of points after we passed the min distance in the last loop
+                min_dist.sort_by(|(d1, _, _), (d2, _, _)| d1.total_cmp(d2));
+                if let Some((min_dist, min_index, gps_data_ind)) = min_dist.first()
+                    && *min_dist < 10.0
+                {
+                    split_times.push(Some(
+                        activity_ref.telemetry.timestamps[*min_index].unwrap()
+                            - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
+                    ));
+                    gate_gps_index.push(Some(gps_data[0..*gps_data_ind].to_vec())); //needed for visuals
+                    gps_data.clear();
+                    last_suc_ind = *min_index;
+                } else {
+                    println!("Gate #{} was never crossed", gate_ind);
+                    split_times.push(None);
+                    gate_gps_index.push(None);
+                }
             }
         }
         assert_eq!(split_times.len(), gate_gps_index.len());
