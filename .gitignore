@@ -18,3 +18,5 @@ Data
 Video
 BIN_DATA
 SEGMENTS
+
+*.html

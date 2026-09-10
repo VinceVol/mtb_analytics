@@ -122,11 +122,9 @@ fn main() {
                         None, // Some((-5.0, 10.0)),
                     );
 
-                    let output_file = Path::new("test_map.html");
-                    println!("Writing HTML map to: {:?}", output_file);
-
                     match graph_ind {
                         0 => {
+                            let output_file = Path::new("small_map.html");
                             let _result = open_map_in_browser(
                                 &geojson,
                                 "Split Gap (s)",
@@ -135,6 +133,7 @@ fn main() {
                             );
                         }
                         1 => {
+                            let output_file = Path::new("med_map.html");
                             let _result = open_map_in_browser(
                                 &geojson,
                                 "Split Gap (s)",
@@ -143,6 +142,7 @@ fn main() {
                             );
                         }
                         2 => {
+                            let output_file = Path::new("large_map.html");
                             let _result = open_map_in_browser(
                                 &geojson,
                                 "Split Gap (s)",
