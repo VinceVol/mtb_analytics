@@ -118,8 +118,8 @@ fn main() {
                         &gap_track.data,
                         "Split Gap (s)",
                         None, //Some(&gap_track.labels),
-                        None, //Some(&gate),
-                        None, // Some((-5.0, 10.0)),
+                        Some(&gate),
+                        // Some((-0.0, 10.0)),
                     );
 
                     match graph_ind {
