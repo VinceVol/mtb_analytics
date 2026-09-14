@@ -15,6 +15,7 @@ mod activity;
 mod data_comp;
 mod gate;
 mod segments;
+mod slope;
 
 pub static FIT_LOC: &'static str = "./Data/";
 pub static BIN_SAVE_LOC: &'static str = "./BIN_DATA/";

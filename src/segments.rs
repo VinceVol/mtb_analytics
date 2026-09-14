@@ -18,13 +18,14 @@ use rkyv::{Archive, Deserialize, Serialize, deserialize, rancor};
 #[rkyv(compare(PartialEq), derive(Debug))]
 pub struct Segment {
     name: String,
-    ref_length: u32,          //meters/100
-    pub small_gap: Vec<Gate>, //every 5 readings on ref
+    ref_length: u32,                //meters/100
+    pub small_gap: Vec<Gate>,       //every 5 readings on ref
     pub med_gap: Vec<Gate>, //every 20 readings on ref usize(as u64 cuz of archive) points to a gate index in small gap
     pub large_gap: Vec<Gate>, //every 60 readings on ref
     start_end_pos: [(f32, f32); 2], //reference to determine whether the segment was finished
-                            // uphills: Vec<(gate,gate)>,
-                            // downhills: Vec<(gate,gate)>,
+    pub slope: Vec<f32>,
+    // uphills: Vec<(gate,gate)>,
+    // downhills: Vec<(gate,gate)>,
 }
 
 impl Segment {
@@ -89,6 +90,7 @@ impl Segment {
             })
             .ok_or("segment end position not found")?;
 
+        let mut five_points: [(f32, f32, u32); 5] = [(420.0, 420.0, 0); 5];
         let mut three_points: [(f32, f32); 3] = [(420.0, 420.0); 3];
         for i in seg_start_ind..seg_end_ind {
             if (i as f32 / 5.0) == (i as f32 / 5.0) as usize as f32 && i + 3 <= seg_end_ind {
@@ -106,6 +108,7 @@ impl Segment {
                 //If any of the coordinates didn't exist (yielding the initial 420.0) then skip
                 if !three_points.iter().any(|(x, y)| *x == 420.0 || *y == 420.0) {
                     let gate = Gate::new(three_points, 15.0);
+                    let slope = Slope::new(five_points);
                     if (i as f32 / 20.0) == (i as f32 / 20.0) as usize as f32 {
                         med_gap.push(gate.clone());
                     }
