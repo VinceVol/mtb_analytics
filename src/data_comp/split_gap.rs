@@ -4,31 +4,32 @@ use crate::{activity::Activity, gate::Gate};
 
 #[derive(Debug)]
 pub struct GapTrack {
-    pub data: Vec<(f32, f32, f32)>,
+    pub data: Vec<(f32, f32, f32, f32)>,
     pub labels: Vec<(f32, f32, String)>,
 }
 
 #[derive(Debug)]
 pub struct GapVec {
     pub gap_vec: Vec<Option<u32>>,
-    gate_gps_index: Vec<Option<Vec<(f32, f32)>>>, //Need to store the telemetry index when crossing the gate
+    gate_gps_index: Vec<Option<Vec<(f32, f32, u32)>>>, //lon, lat, alt
 }
 
 impl GapVec {
     pub fn new(gates: &Vec<Gate>, activity_ref: &Activity) -> Self {
         let mut split_times: Vec<Option<u32>> = Vec::new();
-        let mut gate_gps_index: Vec<Option<Vec<(f32, f32)>>> = Vec::new();
+        let mut gate_gps_index: Vec<Option<Vec<(f32, f32, u32)>>> = Vec::new();
         let mut pp_long = None; //previous longitude
         let mut pp_lat = None; //previous latitude
         let mut long = None;
         let mut lat = None;
+        let mut alt = None;
         let mut last_suc_ind: usize = 0; //track the index you left off at
         let mut success; //Track whether intersection was found
         for (gate_ind, gate) in gates.iter().enumerate() {
             //track whether data point was saved
             success = false;
 
-            let mut gps_data: Vec<(f32, f32)> = Vec::new(); //dump telemetry data in here
+            let mut gps_data: Vec<(f32, f32, u32)> = Vec::new(); //dump telemetry data in here
             //As a backup for missed gates append the distance from gate to choose the point w/
             // min distance if the gate was never crossed
             let mut min_dist = Vec::new();
@@ -44,10 +45,11 @@ impl GapVec {
                 }
                 long = activity_ref.telemetry.longitude[index];
                 lat = activity_ref.telemetry.latitude[index];
+                alt = activity_ref.telemetry.altitude_m[index];
 
                 //add data to gps coord vec
-                if let (Some(l_lon), Some(l_lat)) = (long, lat) {
-                    gps_data.push((l_lon, l_lat));
+                if let (Some(l_lon), Some(l_lat), Some(l_alt)) = (long, lat, alt) {
+                    gps_data.push((l_lon, l_lat, l_alt));
 
                     if let (Some(p_lon), Some(p_lat)) = (pp_long, pp_lat) {
                         //construct the line we want to check going through the gate
@@ -138,14 +140,20 @@ impl GapTrack {
 
         for (index, tele_data) in gap_vec_2.gate_gps_index.iter_mut().enumerate() {
             if tele_data.is_some() {
-                for (tele_index, (long, lat)) in tele_data.as_mut().unwrap().iter().enumerate() {
+                for (tele_index, (long, lat, alt)) in tele_data.as_mut().unwrap().iter().enumerate()
+                {
                     if tele_index == 0 {
                         labels.push((*lat, *long, differences[index].unwrap_or(0).to_string()));
                     }
                     //show a difference of 0 if that difference didnt exist
                     // kind of a flaw for now but whatever. Eventually I should
                     // print missing data purple or something TODO
-                    data.push((*lat, *long, differences[index].unwrap_or(0) as f32));
+                    data.push((
+                        *lat,
+                        *long,
+                        *alt as f32,
+                        differences[index].unwrap_or(0) as f32,
+                    ));
                 }
             }
         }

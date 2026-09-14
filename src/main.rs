@@ -95,6 +95,7 @@ fn main() {
                 //Starting with just one gap size for now
                 println!("|PR Gate Analysis|");
                 let gates = [seg_ref.small_gap, seg_ref.med_gap, seg_ref.large_gap];
+                let mut results = vec![];
 
                 for (graph_ind, gate) in gates.iter().enumerate() {
                     let pr_gate_vec = GapVec::new(
@@ -124,35 +125,18 @@ fn main() {
 
                     match graph_ind {
                         0 => {
-                            let output_file = Path::new("small_map.html");
-                            let _result = open_map_in_browser(
-                                &geojson,
-                                "Split Gap (s)",
-                                output_file,
-                                "Small Gap",
-                            );
+                            results.push((geojson, "Split Gap (s)", "Small Gap"));
                         }
                         1 => {
-                            let output_file = Path::new("med_map.html");
-                            let _result = open_map_in_browser(
-                                &geojson,
-                                "Split Gap (s)",
-                                output_file,
-                                "Med Gap",
-                            );
+                            results.push((geojson, "Split Gap (s)", "Medium Gap"));
                         }
                         2 => {
-                            let output_file = Path::new("large_map.html");
-                            let _result = open_map_in_browser(
-                                &geojson,
-                                "Split Gap (s)",
-                                output_file,
-                                "Large Gap",
-                            );
+                            results.push((geojson, "Split Gap (s)", "Large Gap"));
                         }
                         _ => (),
                     }
                 }
+                let _ = open_map_in_browser(&results, Path::new("results.html"), "Chosen vs PR");
             }
             "q" => {
                 break;
