@@ -226,12 +226,12 @@ pub fn open_map_in_browser(
 
         <div class="section-header">Slope Filter (%)</div>
         <div class="slider-group">
-            <label>Min Slope: <span id="slope-min-val">-100%</span></label>
-            <input type="range" id="slope-min-slider" min="-100" max="100" value="-100" step="1">
+            <label>Min Slope: <span id="slope-min-val">-15%</span></label>
+            <input type="range" id="slope-min-slider" min="-15" max="15" value="-15" step="0.05">
         </div>
         <div class="slider-group">
-            <label>Max Slope: <span id="slope-max-val">100%</span></label>
-            <input type="range" id="slope-max-slider" min="-100" max="100" value="100" step="1">
+            <label>Max Slope: <span id="slope-max-val">15%</span></label>
+            <input type="range" id="slope-max-slider" min="-15" max="15" value="15" step="0.05">
         </div>
 
         <div class="section-header">Value Range Filter</div>
