@@ -21,6 +21,7 @@ pub struct TrackpointDataFrame {
     pub latitude: Vec<Option<f32>>,   // Decimal degrees
     pub longitude: Vec<Option<f32>>,  // Decimal degrees
     pub altitude_m: Vec<Option<u32>>, // Meters
+    pub slope: Vec<Option<f32>>,      //Calculated
 }
 
 // Sparse event metadata
@@ -82,6 +83,7 @@ impl Activity {
             latitude: Vec::new(),
             longitude: Vec::new(),
             altitude_m: Vec::new(),
+            slope: Vec::new(),
         };
         //segment data
         let mut segments: Vec<SegmentRef> = Vec::new();
@@ -203,6 +205,39 @@ impl Activity {
                     trackpoint_dataframe.latitude.push(latitude);
                     trackpoint_dataframe.longitude.push(longitude);
                     trackpoint_dataframe.altitude_m.push(altitude_m);
+
+                    //Calculate moving average of slope TODO
+                    let mut five_points: [(f32, f32, u32); 5] = [(420.0, 420.0, 0); 5];
+                    let cur_len = trackpoint_dataframe.timestamps.len() as i64;
+                    if cur_len >= 5 {
+                        for (i, ii) in ((cur_len - 5)..cur_len).enumerate() {
+                            let (lon, lat, alt) = (
+                                trackpoint_dataframe.longitude[ii as usize],
+                                trackpoint_dataframe.latitude[ii as usize],
+                                trackpoint_dataframe.altitude_m[ii as usize],
+                            );
+                            if let (Some(lon_s), Some(lat_s), Some(alt_s)) = (lon, lat, alt) {
+                                five_points[i].0 = lon_s;
+                                five_points[i].1 = lat_s;
+                                five_points[i].2 = alt_s;
+                            }
+                        }
+                        if !five_points
+                            .iter()
+                            .any(|(x, y, _a)| *x == 420.0 || *y == 420.0)
+                        {
+                            let slope = crate::slope::find_slope(five_points);
+                            trackpoint_dataframe.slope.push(Some(slope));
+                        } else {
+                            trackpoint_dataframe.slope.push(Some(0.0));
+                        }
+                    } else {
+                        trackpoint_dataframe.slope.push(Some(0.0));
+                    }
+                    assert_eq!(
+                        trackpoint_dataframe.slope.len(),
+                        trackpoint_dataframe.timestamps.len()
+                    );
                 }
                 _ => continue,
             }

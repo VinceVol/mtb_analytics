@@ -18,7 +18,7 @@ fn haversine_distance_m(lat1: f32, lon1: f32, lat2: f32, lon2: f32) -> f32 {
 }
 
 pub fn generate_track_geojson(
-    data: &[(f32, f32, f32, f32)], //lat,lon,alt,var
+    data: &[(f32, f32, f32, f32)], //lat,lon,slope,var
     variable_name: &str,
     labels: Option<&[(f32, f32, String)]>,
     gates: Option<&[Gate]>,
@@ -35,23 +35,13 @@ pub fn generate_track_geojson(
 
     // 1. Build line segments with raw data values attached
     for window in data.windows(2) {
-        let (lat1, lon1, ele1, _) = window[0];
-        let (lat2, lon2, ele2, val2) = window[1];
+        let (lat1, lon1, _, _) = window[0];
+        let (lat2, lon2, slope, val2) = window[1];
 
         let line_coords = vec![
             vec![lon1 as f64, lat1 as f64],
             vec![lon2 as f64, lat2 as f64],
         ];
-
-        let dist = haversine_distance_m(lat1, lon1, lat2, lon2);
-        let delta_ele = ele2 - ele1;
-
-        // Calculate slope percentage (%)
-        let slope = if dist > 0.001 {
-            (delta_ele / dist) * 100.0
-        } else {
-            0.0
-        };
 
         let geometry = Geometry::new(GeometryValue::new_line_string(line_coords));
         let mut properties = Map::new();
