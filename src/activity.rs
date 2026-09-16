@@ -323,6 +323,7 @@ impl Activity {
                     .telemetry
                     .altitude_m
                     .remove(i - sub_length);
+                segmented_activity.telemetry.slope.remove(i - sub_length);
                 sub_length += 1;
             }
         }
