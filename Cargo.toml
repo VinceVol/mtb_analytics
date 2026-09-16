@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.45"
+ffmpeg-sidecar = "2.5.2"
 fit = "0.5.0"
 fitsdk = "0.1.0"
 geojson = "1.0.0"

@@ -11,11 +11,14 @@ use crate::{
     segments::{Segment, avail_seg_act, list_segments},
 };
 
+use ffmpeg_sidecar::download::auto_download;
+
 mod activity;
 mod data_comp;
 mod gate;
 mod segments;
 mod slope;
+// mod video;
 
 pub static FIT_LOC: &'static str = "./Data/";
 pub static BIN_SAVE_LOC: &'static str = "./BIN_DATA/";
@@ -28,6 +31,9 @@ fn main() {
     std::fs::create_dir_all(VIDEO_LOC).expect("unable to create Data Dir in release build");
     std::fs::create_dir_all(BIN_SAVE_LOC).expect("BINCODE folder unable to be created");
     std::fs::create_dir_all(SEGMENT_LOC).expect("SEGMENT folder unable to be created");
+
+    //init ffmpeg -- video editing tool ported into rust
+    auto_download().unwrap();
 
     //Refresh the data folder for any new uploads
     Activity::refresh_bin().expect("Unable to refresh bin");
