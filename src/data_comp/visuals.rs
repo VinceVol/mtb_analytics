@@ -224,14 +224,14 @@ pub fn open_map_in_browser(
             <select id="property-select"></select>
         </div>
 
-        <div class="section-header">Slope Filter (%)</div>
-        <div class="slider-group">
-            <label>Min Slope: <span id="slope-min-val">-15%</span></label>
-            <input type="range" id="slope-min-slider" min="-15" max="15" value="-15" step="0.05">
-        </div>
-        <div class="slider-group">
-            <label>Max Slope: <span id="slope-max-val">15%</span></label>
-            <input type="range" id="slope-max-slider" min="-15" max="15" value="15" step="0.05">
+        <div class="select-group">
+            <label for="slope-filter">Slope Category:</label>
+            <select id="slope-filter">
+                <option value="all" selected>All Terrain</option>
+                <option value="uphill">Uphill (> 1%)</option>
+                <option value="flat">Flat (-1% to 1%)</option>
+                <option value="downhill">Downhill (< -1%)</option>
+            </select>
         </div>
 
         <div class="section-header">Value Range Filter</div>
@@ -262,17 +262,13 @@ pub fn open_map_in_browser(
 
         const plotSelect = document.getElementById('plot-select');
         const propertySelect = document.getElementById('property-select');
+        const slopeSelect = document.getElementById('slope-filter');
         const minSlider = document.getElementById('min-slider');
         const maxSlider = document.getElementById('max-slider');
         const minDisplay = document.getElementById('min-val-display');
         const maxDisplay = document.getElementById('max-val-display');
         const varNameMinDisplay = document.getElementById('var-name-min');
         const varNameMaxDisplay = document.getElementById('var-name-max');
-
-        const slopeMinSlider = document.getElementById('slope-min-slider');
-        const slopeMaxSlider = document.getElementById('slope-max-slider');
-        const slopeMinVal = document.getElementById('slope-min-val');
-        const slopeMaxVal = document.getElementById('slope-max-val');
         const gateToggle = document.getElementById('gate-toggle');
 
         Object.keys(allDatasets).forEach(plotName => {
@@ -362,8 +358,7 @@ pub fn open_map_in_browser(
         function renderLayer(datasetPayload) {
             const currentMin = parseFloat(minSlider.value);
             const currentMax = parseFloat(maxSlider.value);
-            const minSlope = parseFloat(slopeMinSlider.value);
-            const maxSlope = parseFloat(slopeMaxSlider.value);
+            const slopeMode = slopeSelect.value;
             const showGates = gateToggle.checked;
             const trackData = datasetPayload.geojson;
 
@@ -389,14 +384,18 @@ pub fn open_map_in_browser(
                     const slopeVal = getFeatureValue(feature.properties, "slope");
 
                     let isWithinSlope = true;
-                    if (slopeVal !== undefined && slopeVal !== null) {
+                    if (slopeVal !== undefined && slopeVal !== null && slopeMode !== "all") {
                         let s = Number(slopeVal);
-                        if (s < minSlope || s > maxSlope) {
+                        if (slopeMode === "uphill" && s <= 1.0) {
+                            isWithinSlope = false;
+                        } else if (slopeMode === "flat" && (s < -1.0 || s > 1.0)) {
+                            isWithinSlope = false;
+                        } else if (slopeMode === "downhill" && s >= -1.0) {
                             isWithinSlope = false;
                         }
                     }
 
-                    const targetOpacity = isWithinSlope ? 0.9 : 0.3;
+                    const targetOpacity = isWithinSlope ? 0.9 : 0.2;
                     const targetWeight = isWithinSlope ? 6 : 2;
 
                     const color = (val !== undefined && val !== null) 
@@ -456,21 +455,7 @@ pub fn open_map_in_browser(
             updateBoundsAndMap(true);
         });
 
-        slopeMinSlider.addEventListener('input', (e) => {
-            if (parseFloat(e.target.value) > parseFloat(slopeMaxSlider.value)) {
-                slopeMaxSlider.value = e.target.value;
-                slopeMaxVal.innerText = e.target.value + '%';
-            }
-            slopeMinVal.innerText = parseFloat(e.target.value).toFixed(0) + '%';
-            renderLayer(allDatasets[currentPlotKey]);
-        });
-
-        slopeMaxSlider.addEventListener('input', (e) => {
-            if (parseFloat(e.target.value) < parseFloat(slopeMinSlider.value)) {
-                slopeMinSlider.value = e.target.value;
-                slopeMinVal.innerText = e.target.value + '%';
-            }
-            slopeMaxVal.innerText = parseFloat(e.target.value).toFixed(0) + '%';
+        slopeSelect.addEventListener('change', () => {
             renderLayer(allDatasets[currentPlotKey]);
         });
 
