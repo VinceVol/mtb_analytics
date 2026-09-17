@@ -18,17 +18,15 @@ mod data_comp;
 mod gate;
 mod segments;
 mod slope;
-// mod video;
+mod video;
 
 pub static FIT_LOC: &'static str = "./Data/";
 pub static BIN_SAVE_LOC: &'static str = "./BIN_DATA/";
-pub static VIDEO_LOC: &'static str = "./Video/";
 pub static SEGMENT_LOC: &'static str = "./SEGMENTS/";
 
 fn main() {
     //Make sure the proper folders exists
     std::fs::create_dir_all(FIT_LOC).expect("unable to create Data Dir in release build");
-    std::fs::create_dir_all(VIDEO_LOC).expect("unable to create Data Dir in release build");
     std::fs::create_dir_all(BIN_SAVE_LOC).expect("BINCODE folder unable to be created");
     std::fs::create_dir_all(SEGMENT_LOC).expect("SEGMENT folder unable to be created");
 
