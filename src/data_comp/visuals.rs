@@ -160,6 +160,24 @@ pub fn open_map_in_browser(
                 }}).catch(err => console.error('Failed to send event to Rust:', err));
             }}
 
+            // Reliable unload message sent when tab/window closes
+            window.addEventListener('beforeunload', function () {{
+                const url = 'http://127.0.0.1:{server_port}/api/event';
+                const payload = JSON.stringify({{ action: 'tab_closed', data: {{}} }});
+
+                if (navigator.sendBeacon) {{
+                    const blob = new Blob([payload], {{ type: 'text/plain;charset=UTF-8' }});
+                    navigator.sendBeacon(url, blob);
+                }} else {{
+                    fetch(url, {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'text/plain' }},
+                        body: payload,
+                        keepalive: true
+                    }}).catch(() => {{}});
+                }}
+            }});
+
             document.addEventListener("DOMContentLoaded", function() {{
                 if (typeof map !== 'undefined') {{
                     map.on('click', function(e) {{
@@ -445,7 +463,6 @@ pub fn open_map_in_browser(
                     return L.marker(latlng);
                 },
                 onEachFeature: (feature, layer) => {
-                    // Standard popup for numerical feature properties
                     const val = getFeatureValue(feature.properties, activePropKey);
                     const slopeVal = getFeatureValue(feature.properties, "slope");
                     if (val !== undefined && val !== null) {
@@ -456,7 +473,6 @@ pub fn open_map_in_browser(
                         layer.bindPopup(popupText);
                     }
 
-                    // Intercept and route gate clicks
                     const isGateLine = feature.properties && feature.properties.is_gate;
                     const isGateLabel = feature.properties && feature.properties.gate_label !== undefined;
 

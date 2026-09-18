@@ -10,6 +10,7 @@ pub enum WebMessage {
     MapClick { lat: f64, lng: f64 },
     SegmentSelected(String),
     GateClicked { gate_id: usize, dataset_name: String },
+    TabClosed,
     Unknown { action: String, payload: serde_json::Value },
 }
 
@@ -48,7 +49,10 @@ pub fn start_http_listener(server_port: u16) -> Receiver<WebMessage> {
             if request.url().starts_with("/api/event") && request.method() == &Method::Post {
                 let mut content = String::new();
                 if request.as_reader().read_to_string(&mut content).is_ok() {
-                    if let Ok(incoming) = serde_json::from_str::<IncomingPayload>(&content) {
+                    // Trim trailing null bytes or padding sent by sendBeacon on tab teardown
+                    let clean_content = content.trim_matches('\0').trim();
+
+                    if let Ok(incoming) = serde_json::from_str::<IncomingPayload>(clean_content) {
                         let msg = match incoming.action.as_str() {
                             "map_click" => {
                                 let lat = incoming.data["lat"].as_f64().unwrap_or(0.0);
@@ -71,6 +75,7 @@ pub fn start_http_listener(server_port: u16) -> Receiver<WebMessage> {
                                     dataset_name,
                                 }
                             }
+                            "tab_closed" => WebMessage::TabClosed,
                             _ => WebMessage::Unknown {
                                 action: incoming.action,
                                 payload: incoming.data,

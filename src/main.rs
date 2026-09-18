@@ -206,6 +206,7 @@ fn activate_plots(
     let _ = open_map_in_browser(&results, Path::new("results.html"), "Chosen vs PR", 8000);
     let v_f = VideoFolder::open().unwrap();
 
+    println!("-----------------------------------------------------");
     println!("Listening for browser events...");
     for msg in rx {
         match msg {
@@ -236,6 +237,12 @@ fn activate_plots(
             }
             listener::WebMessage::Unknown { action, payload } => {
                 println!("Received custom event '{}': {:?}", action, payload);
+            }
+            listener::WebMessage::TabClosed => {
+                println!("-----------------------------------------------------");
+                println!("Browser Closed!");
+                println!("-----------------------------------------------------");
+                break;
             }
         }
     }
