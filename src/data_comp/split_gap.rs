@@ -8,7 +8,7 @@ pub struct GapTrack {
     pub labels: Vec<(f32, f32, String)>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GapVec {
     pub gap_vec: Vec<Option<u32>>,
     gate_gps_index: Vec<Option<Vec<(f32, f32, f32)>>>, //lon, lat, slope

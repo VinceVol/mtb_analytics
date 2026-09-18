@@ -1,4 +1,4 @@
-use std::{io, path::Path};
+use std::{io, path::Path, sync::mpsc::Receiver};
 
 use inquire::Select;
 
@@ -8,6 +8,7 @@ use crate::{
         split_gap::{GapTrack, GapVec},
         visuals::{generate_track_geojson, open_map_in_browser},
     },
+    listener::{WebMessage, start_http_listener},
     segments::{Segment, avail_seg_act, list_segments},
     video::VideoFolder,
 };
@@ -17,6 +18,7 @@ use ffmpeg_sidecar::download::auto_download;
 mod activity;
 mod data_comp;
 mod gate;
+mod listener;
 mod segments;
 mod slope;
 mod video;
@@ -39,6 +41,9 @@ fn main() {
 
     //Refresh the data folder for any new uploads
     Activity::refresh_bin().expect("Unable to refresh bin");
+
+    //Start the html listener
+    let rx = start_http_listener(8000);
 
     //user selects this based on those available -- this opens up other options
     let mut segment_to_compare: Option<String> = None;
@@ -71,8 +76,8 @@ fn main() {
                 }
                 "PR = Compare chosen to PR" => {
                     //Pull the gate data for the chosen segment
-                    let seg_ref = Segment::check_seg(&segment_to_compare.as_ref().unwrap())
-                        .expect("issues opening segment");
+                    // let seg_ref = Segment::check_seg(&segment_to_compare.as_ref().unwrap())
+                    //     .expect("issues opening segment");
 
                     //Generate list of runs that did the segment without pausing that come within
                     // 0.5km of the ref segment
@@ -94,53 +99,12 @@ fn main() {
                         .prompt()
                         .unwrap();
                     let chosen_activity = Activity::open_bin(&ans.file_name).unwrap();
-                    println!("-----------------------------------------------------");
-
-                    //Run actual comparison
-                    let gates = [seg_ref.small_gap, seg_ref.med_gap, seg_ref.large_gap];
-                    let mut results = vec![];
-
-                    for (graph_ind, gate) in gates.iter().enumerate() {
-                        let pr_gate_vec = GapVec::new(
-                            &gate,
-                            &pr_activity
-                                .segmented_activity(&segment_to_compare.as_ref().unwrap())
-                                .unwrap(),
-                        );
-                        let chosen_gate_vec = GapVec::new(
-                            &gate,
-                            &chosen_activity
-                                .segmented_activity(&segment_to_compare.as_ref().unwrap())
-                                .unwrap(),
-                        );
-                        let gap_track =
-                            GapTrack::compare_gaps(pr_gate_vec, chosen_gate_vec).unwrap();
-                        // dbg!(&gap_track.labels);
-
-                        // Pass labels into geojson generator
-                        let geojson = generate_track_geojson(
-                            &gap_track.data,
-                            "Split Gap (s)",
-                            None, //Some(&gap_track.labels),
-                            Some(&gate),
-                            // Some((-0.0, 10.0)),
-                        );
-
-                        match graph_ind {
-                            0 => {
-                                results.push((geojson, "Split Gap (s)", "Small Gap"));
-                            }
-                            1 => {
-                                results.push((geojson, "Split Gap (s)", "Medium Gap"));
-                            }
-                            2 => {
-                                results.push((geojson, "Split Gap (s)", "Large Gap"));
-                            }
-                            _ => (),
-                        }
-                    }
-                    let _ =
-                        open_map_in_browser(&results, Path::new("results.html"), "Chosen vs PR");
+                    activate_plots(
+                        pr_activity,
+                        chosen_activity,
+                        segment_to_compare.clone(),
+                        &rx,
+                    );
                 }
                 "2U = Compare chosen to chosen" => {
                     if segment_to_compare.is_none() {
@@ -169,46 +133,109 @@ fn main() {
                     let chosen_activity_2 = Activity::open_bin(&ans.file_name).unwrap();
                     println!("-----------------------------------------------------");
 
-                    //Run actual comparison
-                    //Starting with just one gap size for now
-                    let gate = seg_ref.med_gap;
-                    let mut results = vec![];
-
-                    let chosen_gate_vec_1 = GapVec::new(
-                        &gate,
-                        &chosen_activity_1
-                            .segmented_activity(&segment_to_compare.as_ref().unwrap())
-                            .unwrap(),
+                    activate_plots(
+                        chosen_activity_1,
+                        chosen_activity_2,
+                        segment_to_compare.clone(),
+                        &rx,
                     );
-                    let chosen_gate_vec_2 = GapVec::new(
-                        &gate,
-                        &chosen_activity_2
-                            .segmented_activity(&segment_to_compare.as_ref().unwrap())
-                            .unwrap(),
-                    );
-                    let v_f = VideoFolder::open().unwrap();
-                    v_f.compare(&chosen_gate_vec_1, &chosen_gate_vec_2, 22);
-                    let gap_track =
-                        GapTrack::compare_gaps(chosen_gate_vec_1, chosen_gate_vec_2).unwrap();
-                    // dbg!(&gap_track.labels);
-
-                    // Pass labels into geojson generator
-                    let geojson = generate_track_geojson(
-                        &gap_track.data,
-                        "Split Gap (s)",
-                        None, //Some(&gap_track.labels),
-                        Some(&gate),
-                        // Some((-0.0, 10.0)),
-                    );
-
-                    results.push((geojson, "Split Gap (s)", "Medium Gap"));
-
-                    let _ = open_map_in_browser(&results, Path::new("results.html"), "2U");
                 }
                 "Q = Quit" => {
                     break;
                 }
                 _ => println!("Improper input!"),
+            }
+        }
+    }
+}
+
+fn activate_plots(
+    A1: Activity,
+    A2: Activity,
+    segment_to_compare: Option<String>,
+    rx: &Receiver<WebMessage>,
+) {
+    //Run actual comparison
+    let seg_ref =
+        Segment::check_seg(&segment_to_compare.as_ref().unwrap()).expect("issues opening segment");
+    let gates = [seg_ref.small_gap, seg_ref.med_gap, seg_ref.large_gap];
+    let mut results = vec![];
+
+    let mut first_gate_vecs = vec![];
+    let mut second_gate_vecs = vec![];
+
+    for (graph_ind, gate) in gates.iter().enumerate() {
+        let first_gate_vec = GapVec::new(
+            &gate,
+            &A1.segmented_activity(&segment_to_compare.as_ref().unwrap())
+                .unwrap(),
+        );
+        let second_gate_vec = GapVec::new(
+            &gate,
+            &A2.segmented_activity(&segment_to_compare.as_ref().unwrap())
+                .unwrap(),
+        );
+        let gap_track =
+            GapTrack::compare_gaps(first_gate_vec.clone(), second_gate_vec.clone()).unwrap();
+        first_gate_vecs.push(first_gate_vec);
+        second_gate_vecs.push(second_gate_vec);
+        // dbg!(&gap_track.labels);
+
+        // Pass labels into geojson generator
+        let geojson = generate_track_geojson(
+            &gap_track.data,
+            "Split Gap (s)",
+            None, //Some(&gap_track.labels),
+            Some(&gate),
+            // Some((-0.0, 10.0)),
+        );
+
+        match graph_ind {
+            0 => {
+                results.push((geojson, "Split Gap (s)", "Small Gap"));
+            }
+            1 => {
+                results.push((geojson, "Split Gap (s)", "Medium Gap"));
+            }
+            2 => {
+                results.push((geojson, "Split Gap (s)", "Large Gap"));
+            }
+            _ => (),
+        }
+    }
+    let _ = open_map_in_browser(&results, Path::new("results.html"), "Chosen vs PR", 8000);
+    let v_f = VideoFolder::open().unwrap();
+
+    println!("Listening for browser events...");
+    for msg in rx {
+        match msg {
+            listener::WebMessage::MapClick { lat, lng } => {
+                println!("Clicked map at coordinates: {}, {}", lat, lng);
+            }
+            listener::WebMessage::GateClicked {
+                gate_id,
+                dataset_name,
+            } => {
+                println!("Gate clicked: {}", gate_id);
+                println!("sheet: {}", dataset_name);
+                match dataset_name.as_str() {
+                    "Small Gap" => {
+                        let _ = v_f.compare(&first_gate_vecs[0], &second_gate_vecs[0], gate_id);
+                    }
+                    "Medium Gap" => {
+                        let _ = v_f.compare(&first_gate_vecs[1], &second_gate_vecs[1], gate_id);
+                    }
+                    "Large Gap" => {
+                        let _ = v_f.compare(&first_gate_vecs[2], &second_gate_vecs[2], gate_id);
+                    }
+                    _ => println!("Invalid input for vid gen"),
+                }
+            }
+            listener::WebMessage::SegmentSelected(seg) => {
+                println!("Segment selected: {}", seg);
+            }
+            listener::WebMessage::Unknown { action, payload } => {
+                println!("Received custom event '{}': {:?}", action, payload);
             }
         }
     }

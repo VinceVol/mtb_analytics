@@ -123,6 +123,7 @@ pub fn open_map_in_browser(
     datasets: &[(FeatureCollection, &str, &str)],
     output_path: &Path,
     map_title: &str,
+    server_port: u16,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if datasets.is_empty() {
         return Err("No datasets provided to visualize.".into());
@@ -147,14 +148,39 @@ pub fn open_map_in_browser(
 
     let all_data_json = serde_json::to_string(&data_map)?;
 
+    // Injected communication script
+    let listener_script = format!(
+        r#"
+        <script>
+            function sendToRust(action, payload) {{
+                fetch('http://127.0.0.1:{server_port}/api/event', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ action: action, data: payload }})
+                }}).catch(err => console.error('Failed to send event to Rust:', err));
+            }}
+
+            document.addEventListener("DOMContentLoaded", function() {{
+                if (typeof map !== 'undefined') {{
+                    map.on('click', function(e) {{
+                        sendToRust('map_click', {{ lat: e.latlng.lat, lng: e.latlng.lng }});
+                    }});
+                }}
+            }});
+        </script>
+        "#
+    );
+
+    // HTML Template
     let raw_html = r##"<!DOCTYPE html>
 <html>
 <head>
-    <title>{{MAP_TITLE}}</title>
+    <title>__MAP_TITLE__</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    __LISTENER_SCRIPT__
     <style>
         body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
         #map { height: 100vh; width: 100vw; }
@@ -194,7 +220,7 @@ pub fn open_map_in_browser(
         .gate-label-badge {
             background-color: #0f172a; color: #f8fafc; padding: 2px 6px; border-radius: 4px;
             font-size: 10px; font-weight: 700; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-            border: 1px solid #94a3b8;
+            border: 1px solid #94a3b8; cursor: pointer;
         }
     </style>
 </head>
@@ -245,8 +271,8 @@ pub fn open_map_in_browser(
             maxZoom: 19, attribution: 'Tiles © Esri'
         }).addTo(map);
 
-        const allDatasets = {{ALL_DATA_JSON}};
-        let currentPlotKey = "{{DEFAULT_PLOT_KEY}}";
+        const allDatasets = __ALL_DATA_JSON__;
+        let currentPlotKey = "__DEFAULT_PLOT_KEY__";
         let activePropKey = "";
 
         const plotSelect = document.getElementById('plot-select');
@@ -419,6 +445,7 @@ pub fn open_map_in_browser(
                     return L.marker(latlng);
                 },
                 onEachFeature: (feature, layer) => {
+                    // Standard popup for numerical feature properties
                     const val = getFeatureValue(feature.properties, activePropKey);
                     const slopeVal = getFeatureValue(feature.properties, "slope");
                     if (val !== undefined && val !== null) {
@@ -427,6 +454,34 @@ pub fn open_map_in_browser(
                             popupText += `<br>Slope: ${Number(slopeVal).toFixed(1)}%`;
                         }
                         layer.bindPopup(popupText);
+                    }
+
+                    // Intercept and route gate clicks
+                    const isGateLine = feature.properties && feature.properties.is_gate;
+                    const isGateLabel = feature.properties && feature.properties.gate_label !== undefined;
+
+                    if (isGateLine || isGateLabel) {
+                        layer.on('click', function(e) {
+                            L.DomEvent.stopPropagation(e);
+                            
+                            const props = feature.properties || {};
+                            let rawVal = props.gate_id ?? props.gate_label ?? props.label ?? "0";
+                            
+                            let parsedId = 0;
+                            if (typeof rawVal === 'number') {
+                                parsedId = rawVal;
+                            } else if (typeof rawVal === 'string') {
+                                const matches = rawVal.match(/\d+/);
+                                if (matches) {
+                                    parsedId = parseInt(matches[0], 10);
+                                }
+                            }
+
+                            sendToRust('gate_clicked', { 
+                                gate_id: parsedId,
+                                dataset_name: datasetPayload.plot_name 
+                            });
+                        });
                     }
                 }
             }).addTo(map);
@@ -477,13 +532,19 @@ pub fn open_map_in_browser(
 </body>
 </html>"##;
 
+    // Replace template values
     let html_content = raw_html
-        .replace("{{MAP_TITLE}}", map_title)
-        .replace("{{DEFAULT_PLOT_KEY}}", default_plot_key)
-        .replace("{{ALL_DATA_JSON}}", &all_data_json);
+        .replace("__MAP_TITLE__", map_title)
+        .replace("__LISTENER_SCRIPT__", &listener_script)
+        .replace("__DEFAULT_PLOT_KEY__", default_plot_key)
+        .replace("__ALL_DATA_JSON__", &all_data_json);
 
-    let mut file = File::create(output_path)?;
-    file.write_all(html_content.as_bytes())?;
+    // Save HTML and launch browser
+    {
+        let mut file = File::create(output_path)?;
+        file.write_all(html_content.as_bytes())?;
+        file.flush()?;
+    }
 
     opener::open(output_path)?;
 
