@@ -208,6 +208,9 @@ impl VideoFolder {
             start_gate -= 1;
         }
 
+        let output_file_path = "./output.mp4";
+        let _ = std::fs::remove_file(output_file_path);
+
         //find the appropriate videos for the relavent gate
         let unix_start_1 = gv_1.time_vec[start_gate].unwrap_or_default();
         let unix_end_1 = gv_1.time_vec[start_gate + 1].unwrap_or_default();
@@ -264,7 +267,7 @@ impl VideoFolder {
             .filter_complex(filter_spec)
             .map("[v_out]")
             .map("[a_out]")
-            .output("output.mp4")
+            .output(output_file_path)
             .spawn()?;
 
         // 4. Handle events/progress
@@ -274,6 +277,10 @@ impl VideoFolder {
             }
         }
 
+        match opener::open(output_file_path) {
+            Ok(_) => (),
+            Err(_) => println!("Unable to generate the video :("),
+        }
         Ok(())
     }
 }
