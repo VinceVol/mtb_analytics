@@ -270,6 +270,34 @@ impl Activity {
         Ok(activity)
     }
 
+    //Returns UNIX start time for beginning of activity
+    pub fn start_time(&self) -> Result<u32, Box<dyn std::error::Error>> {
+        Ok(self
+            .telemetry
+            .timestamps
+            .iter()
+            .find(|t| t.is_some())
+            .ok_or(format!(
+                "No start time found in |{}| activity",
+                self.metadata_id.to_string()
+            ))?
+            .unwrap())
+    }
+    //Returns UNIX start time for end of activity
+    pub fn end_time(&self) -> Result<u32, Box<dyn std::error::Error>> {
+        Ok(self
+            .telemetry
+            .timestamps
+            .iter()
+            .rev()
+            .find(|t| t.is_some())
+            .ok_or(format!(
+                "No start time found in |{}| activity",
+                self.metadata_id.to_string()
+            ))?
+            .unwrap())
+    }
+
     //Basically we want to grab an activity file of just the raw activity itself so we can interpret just that information
     // when doing comparisons this is just grabbing the information from the first matched segment in .segments that
     // matches the segment name and then using the start and elapsed time to determine what data to keep

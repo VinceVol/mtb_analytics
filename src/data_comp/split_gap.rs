@@ -12,11 +12,13 @@ pub struct GapTrack {
 pub struct GapVec {
     pub gap_vec: Vec<Option<u32>>,
     gate_gps_index: Vec<Option<Vec<(f32, f32, f32)>>>, //lon, lat, slope
+    pub time_vec: Vec<Option<u32>>, //Time from unix -- know when to playback videos
 }
 
 impl GapVec {
     pub fn new(gates: &Vec<Gate>, activity_ref: &Activity) -> Self {
         let mut split_times: Vec<Option<u32>> = Vec::new();
+        let mut time_vec: Vec<Option<u32>> = Vec::new(); //Time from unix 
         let mut gate_gps_index: Vec<Option<Vec<(f32, f32, f32)>>> = Vec::new();
         let mut pp_long = None; //previous longitude
         let mut pp_lat = None; //previous latitude
@@ -63,6 +65,7 @@ impl GapVec {
                                 activity_ref.telemetry.timestamps[index].unwrap()
                                     - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
                             ));
+                            time_vec.push(activity_ref.telemetry.timestamps[index]);
                             gate_gps_index.push(Some(gps_data.clone())); //needed for visuals
                             gps_data.clear();
                             last_suc_ind = index;
@@ -103,100 +106,9 @@ impl GapVec {
         return Self {
             gap_vec: split_times,
             gate_gps_index,
+            time_vec,
         };
     }
-
-    // pub fn new(gates: &Vec<Gate>, activity_ref: &Activity) -> Self {
-    //     let mut split_times: Vec<Option<u32>> = Vec::new();
-    //     let mut gate_gps_index: Vec<Option<Vec<(f32, f32, f32)>>> = Vec::new();
-    //     let mut pp_long = None; //previous longitude
-    //     let mut pp_lat = None; //previous latitude
-    //     let mut long = None;
-    //     let mut lat = None;
-    //     let mut slp;
-    //     let mut last_suc_ind: usize = 0; //track the index you left off at
-    //     let mut success; //Track whether intersection was found
-    //     for (gate_ind, gate) in gates.iter().enumerate() {
-    //         //track whether data point was saved
-    //         success = false;
-
-    //         let mut gps_data: Vec<(f32, f32, f32)> = Vec::new(); //dump telemetry data in here
-    //         //As a backup for missed gates append the distance from gate to choose the point w/
-    //         // min distance if the gate was never crossed
-    //         let mut min_dist = Vec::new();
-    //         for index in 0..activity_ref.telemetry.longitude.len() {
-    //             //dont go back through the front end of activity telemetry every time you
-    //             // cycle through to find the intersection of a gate
-    //             if index <= last_suc_ind {
-    //                 continue;
-    //             }
-    //             if long.is_some() && lat.is_some() {
-    //                 pp_long = long;
-    //                 pp_lat = lat;
-    //             }
-    //             long = activity_ref.telemetry.longitude[index];
-    //             lat = activity_ref.telemetry.latitude[index];
-    //             slp = activity_ref.telemetry.slope[index];
-
-    //             //add data to gps coord vec
-    //             if let (Some(l_lon), Some(l_lat), Some(l_slope)) = (long, lat, slp) {
-    //                 gps_data.push((l_lon, l_lat, l_slope));
-
-    //                 if let (Some(p_lon), Some(p_lat)) = (pp_long, pp_lat) {
-    //                     //construct the line we want to check going through the gate
-    //                     let current_point = (l_lon, l_lat);
-    //                     let prev_point = (p_lon, p_lat);
-    //                     assert_ne!(current_point, prev_point);
-    //                     let points = [prev_point, current_point];
-
-    //                     //check if the gate was crossed by that new line (points)
-    //                     if gate.is_crossed(points) {
-    //                         split_times.push(Some(
-    //                             activity_ref.telemetry.timestamps[index].unwrap()
-    //                                 - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
-    //                         ));
-    //                         gate_gps_index.push(Some(gps_data.clone())); //needed for visuals
-    //                         gps_data.clear();
-    //                         last_suc_ind = index;
-    //                         success = true;
-    //                         break;
-    //                     } else {
-    //                         min_dist.push((
-    //                             gate.dist_to_center(l_lon, l_lat),
-    //                             index,
-    //                             gps_data.len(),
-    //                         ));
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //         if !success {
-    //             //gps_data index is there to tell us what to save up to since we appended
-    //             // a bunch of points after we passed the min distance in the last loop
-    //             min_dist.sort_by(|(d1, _, _), (d2, _, _)| d1.total_cmp(d2));
-    //             if let Some((min_dist, min_index, gps_data_ind)) = min_dist.first()
-    //                 && *min_dist < 10.0
-    //             {
-    //                 split_times.push(Some(
-    //                     activity_ref.telemetry.timestamps[*min_index].unwrap()
-    //                         - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
-    //                 ));
-    //                 gate_gps_index.push(Some(gps_data[0..*gps_data_ind].to_vec())); //needed for visuals
-    //                 gps_data.clear();
-    //                 last_suc_ind = *min_index;
-    //             } else {
-    //                 println!("Gate #{} was never crossed", gate_ind);
-    //                 split_times.push(None);
-    //                 gate_gps_index.push(None);
-    //             }
-    //         }
-    //     }
-    //     assert_eq!(split_times.len(), gate_gps_index.len());
-    //     return Self {
-    //         gap_vec: split_times,
-    //         gate_gps_index,
-    //     };
-    // }
 }
 
 impl GapTrack {

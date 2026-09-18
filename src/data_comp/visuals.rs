@@ -6,17 +6,6 @@ use std::path::Path;
 
 use crate::gate::Gate;
 
-/// Calculates horizontal distance between two points in meters using Haversine formula
-fn haversine_distance_m(lat1: f32, lon1: f32, lat2: f32, lon2: f32) -> f32 {
-    let r = 6371000.0; // Earth radius in meters
-    let d_lat = (lat2 - lat1).to_radians();
-    let d_lon = (lon2 - lon1).to_radians();
-    let a = (d_lat / 2.0).sin().powi(2)
-        + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lon / 2.0).sin().powi(2);
-    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
-    r * c
-}
-
 pub fn generate_track_geojson(
     data: &[(f32, f32, f32, f32)], //lat,lon,slope,var
     variable_name: &str,
