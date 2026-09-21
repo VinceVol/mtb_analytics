@@ -221,13 +221,16 @@ fn activate_plots(
                 println!("sheet: {}", dataset_name);
                 match dataset_name.as_str() {
                     "Small Gap" => {
-                        let _ = v_f.compare(&first_gate_vecs[0], &second_gate_vecs[0], gate_id);
+                        let _ =
+                            v_f.compare(&first_gate_vecs[0], &second_gate_vecs[0], gate_id, 8000);
                     }
                     "Medium Gap" => {
-                        let _ = v_f.compare(&first_gate_vecs[1], &second_gate_vecs[1], gate_id);
+                        let _ =
+                            v_f.compare(&first_gate_vecs[1], &second_gate_vecs[1], gate_id, 8000);
                     }
                     "Large Gap" => {
-                        let _ = v_f.compare(&first_gate_vecs[2], &second_gate_vecs[2], gate_id);
+                        let _ =
+                            v_f.compare(&first_gate_vecs[2], &second_gate_vecs[2], gate_id, 8000);
                     }
                     _ => println!("Invalid input for vid gen"),
                 }
