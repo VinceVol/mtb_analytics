@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+base64 = "0.23.1"
 chrono = "0.4.45"
 ffmpeg-sidecar = "2.5.2"
 fit = "0.5.0"

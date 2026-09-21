@@ -6,6 +6,8 @@ use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::FfmpegEvent;
 use rkyv::{Archive, Deserialize, Serialize, deserialize, rancor};
 use serde_json::Value;
+use std::fs::File;
+use std::path::Path;
 use std::process::Command;
 use std::{
     fmt::Debug,
@@ -202,7 +204,6 @@ impl VideoFolder {
         mut start_gate: usize,
         server_port: u16,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Validation logic
         assert_eq!(gv_1.time_vec.len(), gv_2.time_vec.len());
         assert!(!gv_1.time_vec.is_empty());
         if start_gate == gv_1.time_vec.len() {
@@ -214,7 +215,6 @@ impl VideoFolder {
         let _ = std::fs::remove_file(clip1_output);
         let _ = std::fs::remove_file(clip2_output);
 
-        // Find the appropriate videos for the relevant gate
         let unix_start_1 = gv_1.time_vec[start_gate].unwrap_or_default();
         let unix_end_1 = gv_1.time_vec[start_gate + 1].unwrap_or_default();
         let unix_start_2 = gv_2.time_vec[start_gate].unwrap_or_default();
@@ -232,11 +232,9 @@ impl VideoFolder {
             .find(|v| v.contains(unix_start_2) && v.contains(unix_end_2))
             .ok_or("unable to find the second gap vec video")?;
 
-        // Find the offsets from action cam time to real time
         let off_1: i32 = gv_1.time_vec[0].unwrap_or_default() as i32 - gv_1_video.start_time as i32;
         let off_2: i32 = gv_2.time_vec[0].unwrap_or_default() as i32 - gv_2_video.start_time as i32;
 
-        // Deduce start and duration of actual MP4 segments
         let vid_start_1 = (unix_start_1 as i32 - gv_1_video.start_time as i32 - off_1) as u32;
         let vid_duration_1 = unix_end_1 - unix_start_1;
 
@@ -245,9 +243,9 @@ impl VideoFolder {
 
         let comparison_duration = (vid_duration_1.max(vid_duration_2)) as f64;
 
-        // 1. Generate Video 1 Segment
+        // 1. Generate Clip 1 with web-compatible H.264 video codec
         let filter_spec_1 = format!(
-            "[0:v]trim=start={vid_start_1}:duration={vid_duration_1},setpts=PTS-STARTPTS,scale=-1:1080[v1]; \
+            "[0:v]trim=start={vid_start_1}:duration={vid_duration_1},setpts=PTS-STARTPTS,scale=-1:1080,format=yuv420p[v1]; \
              [0:a]atrim=start={vid_start_1}:duration={vid_duration_1},asetpts=PTS-STARTPTS[a1]"
         );
         let mut child_1 = FfmpegCommand::new()
@@ -255,6 +253,7 @@ impl VideoFolder {
             .filter_complex(filter_spec_1)
             .map("[v1]")
             .map("[a1]")
+            .args(["-c:v", "libx264", "-preset", "ultrafast"])
             .output(clip1_output)
             .spawn()?;
 
@@ -264,9 +263,9 @@ impl VideoFolder {
             }
         }
 
-        // 2. Generate Video 2 Segment
+        // 2. Generate Clip 2 with web-compatible H.264 video codec
         let filter_spec_2 = format!(
-            "[0:v]trim=start={vid_start_2}:duration={vid_duration_2},setpts=PTS-STARTPTS,scale=-1:1080[v2]; \
+            "[0:v]trim=start={vid_start_2}:duration={vid_duration_2},setpts=PTS-STARTPTS,scale=-1:1080,format=yuv420p[v2]; \
              [0:a]atrim=start={vid_start_2}:duration={vid_duration_2},asetpts=PTS-STARTPTS[a2]"
         );
         let mut child_2 = FfmpegCommand::new()
@@ -274,6 +273,7 @@ impl VideoFolder {
             .filter_complex(filter_spec_2)
             .map("[v2]")
             .map("[a2]")
+            .args(["-c:v", "libx264", "-preset", "ultrafast"])
             .output(clip2_output)
             .spawn()?;
 
@@ -283,7 +283,6 @@ impl VideoFolder {
             }
         }
 
-        // Title meta for browser HUD header
         let page_title = format!(
             "Gates {}-{} ({} vs {})",
             start_gate,
@@ -298,11 +297,10 @@ impl VideoFolder {
 
         let html_output_path = Path::new("./video_aligner.html");
 
-        // 3. Launch the local interactive HTML player with the newly trimmed MP4 files
         open_video_aligner_in_browser(
             Path::new(clip1_output),
             Path::new(clip2_output),
-            0.0, // Since FFmpeg trimmed the clips to start at gate entry, initial local offset is 0.0s
+            0.0,
             0.0,
             comparison_duration,
             html_output_path,
@@ -314,10 +312,6 @@ impl VideoFolder {
     }
 }
 
-use serde_json::json;
-use std::fs::File;
-use std::path::Path;
-
 pub fn open_video_aligner_in_browser(
     vid1_path: &Path,
     vid2_path: &Path,
@@ -328,11 +322,19 @@ pub fn open_video_aligner_in_browser(
     page_title: &str,
     server_port: u16,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Convert absolute paths to file:// URLs so local HTML can stream them directly
-    let vid1_url = format!("file://{}", vid1_path.canonicalize()?.display());
-    let vid2_url = format!("file://{}", vid2_path.canonicalize()?.display());
+    // Convert MP4 binary files into Base64 Data URIs to bypass browser file:// CORS restrictions
+    use base64::Engine;
 
-    let payload = json!({
+    let vid1_bytes = std::fs::read(vid1_path)?;
+    let vid2_bytes = std::fs::read(vid2_path)?;
+
+    let vid1_b64 = base64::engine::general_purpose::STANDARD.encode(&vid1_bytes);
+    let vid2_b64 = base64::engine::general_purpose::STANDARD.encode(&vid2_bytes);
+
+    let vid1_url = format!("data:video/mp4;base64,{}", vid1_b64);
+    let vid2_url = format!("data:video/mp4;base64,{}", vid2_b64);
+
+    let payload = serde_json::json!({
         "vid1_url": vid1_url,
         "vid2_url": vid2_url,
         "vid1_start": initial_start_1,
@@ -342,7 +344,6 @@ pub fn open_video_aligner_in_browser(
 
     let data_json = serde_json::to_string(&payload)?;
 
-    // Injected IPC communication script matching your architecture
     let listener_script = format!(
         r#"
         <script>
@@ -354,7 +355,6 @@ pub fn open_video_aligner_in_browser(
                 }}).catch(err => console.error('Failed to send event to Rust:', err));
             }}
 
-            // Reliable unload notification when tab or window closes
             window.addEventListener('beforeunload', function () {{
                 const url = 'http://127.0.0.1:{server_port}/api/event';
                 const payload = JSON.stringify({{ action: 'tab_closed', data: {{}} }});
@@ -375,7 +375,6 @@ pub fn open_video_aligner_in_browser(
         "#
     );
 
-    // Single-page browser Video Synchronization Template
     let raw_html = r##"<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -403,7 +402,6 @@ pub fn open_video_aligner_in_browser(
             overflow: hidden;
         }
 
-        /* Top Header & Controls Area */
         .toolbar {
             background: var(--panel-bg);
             border-bottom: 1px solid var(--border-color);
@@ -466,7 +464,6 @@ pub fn open_video_aligner_in_browser(
         .offset-label { font-size: 12px; font-weight: 600; color: var(--text-sub); }
         .offset-val { font-family: monospace; font-size: 14px; color: #f59e0b; font-weight: bold; width: 70px; text-align: center; }
 
-        /* Split-screen Video Viewport */
         .video-container {
             flex: 1;
             display: flex;
@@ -506,7 +503,6 @@ pub fn open_video_aligner_in_browser(
             letter-spacing: 0.05em;
         }
 
-        /* Bottom Timeline & Scrubber */
         .timeline-bar {
             background: var(--panel-bg);
             border-top: 1px solid var(--border-color);
@@ -549,11 +545,11 @@ pub fn open_video_aligner_in_browser(
     <div class="video-container">
         <div class="video-wrapper">
             <span class="video-badge">CLIP 1 (REFERENCE)</span>
-            <video id="v1" preload="auto"></video>
+            <video id="v1" playsinline preload="auto"></video>
         </div>
         <div class="video-wrapper">
             <span class="video-badge">CLIP 2 (ALIGNED)</span>
-            <video id="v2" preload="auto"></video>
+            <video id="v2" playsinline preload="auto"></video>
         </div>
     </div>
 
@@ -573,14 +569,15 @@ pub fn open_video_aligner_in_browser(
         const offsetDisplay = document.getElementById('offset-display');
         const confirmBtn = document.getElementById('sync-rust-btn');
 
-        // State variables
-        let offsetMs = 0; // relative offset for clip 2 in milliseconds
+        let offsetMs = 0;
         let isPlaying = false;
         let animationFrameId = null;
 
-        // Initialize videos
+        // Initialize sources
         v1.src = DATA.vid1_url;
         v2.src = DATA.vid2_url;
+        v1.load();
+        v2.load();
 
         function updatePlayhead() {
             if (!v1.paused && !v1.ended) {
@@ -598,7 +595,6 @@ pub fn open_video_aligner_in_browser(
             const relTime1 = v1.currentTime - DATA.vid1_start;
             const targetV2Time = DATA.vid2_start + relTime1 + (offsetMs / 1000.0);
             
-            // Hard lock Playhead sync if drift exceeds 40ms
             if (Math.abs(v2.currentTime - targetV2Time) > 0.04) {
                 v2.currentTime = targetV2Time;
             }
@@ -609,7 +605,6 @@ pub fn open_video_aligner_in_browser(
             offsetDisplay.innerText = (offsetMs >= 0 ? "+" : "") + offsetMs + " ms";
             syncClip2Position();
 
-            // Emit dynamic event back to Rust backend on adjustment
             sendToRust('offset_changed', {
                 offset_ms: offsetMs,
                 effective_start_1: DATA.vid1_start,
@@ -626,7 +621,6 @@ pub fn open_video_aligner_in_browser(
             timeDisplay.innerText = `${pad(mins)}:${pad(secs)}.${pad(ms, 3)}`;
         }
 
-        // Event Listeners
         playBtn.addEventListener('click', () => {
             if (isPlaying) {
                 v1.pause();
@@ -672,7 +666,6 @@ pub fn open_video_aligner_in_browser(
             });
         });
 
-        // Initialize display positions when loaded
         v1.addEventListener('loadedmetadata', () => {
             v1.currentTime = DATA.vid1_start;
             v2.currentTime = DATA.vid2_start;
@@ -681,13 +674,11 @@ pub fn open_video_aligner_in_browser(
 </body>
 </html>"##;
 
-    // Substitute placeholders
     let html_content = raw_html
         .replace("__PAGE_TITLE__", page_title)
         .replace("__LISTENER_SCRIPT__", &listener_script)
         .replace("__DATA_JSON__", &data_json);
 
-    // Write file & spawn in default browser
     {
         let mut file = File::create(output_html_path)?;
         file.write_all(html_content.as_bytes())?;
