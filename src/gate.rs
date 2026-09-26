@@ -12,11 +12,12 @@ use utm::{lat_lon_to_zone_number, lat_to_zone_letter, to_utm_wgs84_no_zone, wsg8
 pub struct Gate {
     pub left_pivot: (f32, f32),  //lon, lat
     pub right_pivot: (f32, f32), //lon, lat
+    pub dist: u32, //Distance into a segment/track -- useful to know if you've gone too far
 }
 
 impl Gate {
     //length is in meters
-    pub fn new(points: [(f32, f32); 3], length_m: f64) -> Gate {
+    pub fn new(points: [(f32, f32); 3], length_m: f64, dist: u32) -> Gate {
         let (utm_points, ref_mat) = points_to_utm(points);
         //check the data_analytics image under gates (2.1) for what the goal is here
         let point_a = Point2::new(utm_points[0].0, utm_points[0].1);
@@ -51,6 +52,7 @@ impl Gate {
         Gate {
             left_pivot: utm_to_points([left_point], [ref_mat[0]])[0],
             right_pivot: utm_to_points([right_point], [ref_mat[0]])[0],
+            dist,
         }
     }
     pub fn dist_to_center(&self, p_long: f32, p_lat: f32) -> f32 {

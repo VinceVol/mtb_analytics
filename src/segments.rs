@@ -31,7 +31,7 @@ impl Segment {
     fn new(ref_activity: &Activity, seg_name: &str) -> Result<Segment, Box<dyn std::error::Error>> {
         //start with some blank vectors to fill
 
-        let mut small_gap: Vec<Gate> = Vec::new(); //every 5 readings on ref
+        let mut small_gap: Vec<Gate> = Vec::new(); //every 5 readings on ref 
         let mut med_gap: Vec<Gate> = Vec::new(); //every 20 readings on ref
         let mut large_gap: Vec<Gate> = Vec::new(); //every 60 readings on ref
 
@@ -105,8 +105,10 @@ impl Segment {
                 }
 
                 //If any of the coordinates didn't exist (yielding the initial 420.0) then skip
-                if !three_points.iter().any(|(x, y)| *x == 420.0 || *y == 420.0) {
-                    let gate = Gate::new(three_points, 15.0);
+                if !three_points.iter().any(|(x, y)| *x == 420.0 || *y == 420.0)
+                    && let Some(dist) = ref_activity.telemetry.distance_m[i + 1]
+                {
+                    let gate = Gate::new(three_points, 15.0, dist);
                     if (i as f32 / 20.0) == (i as f32 / 20.0) as usize as f32 {
                         med_gap.push(gate.clone());
                     }

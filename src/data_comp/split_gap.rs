@@ -1,6 +1,9 @@
 //Common +/- Green red
 
-use crate::{activity::Activity, gate::Gate};
+use crate::{
+    activity::Activity,
+    gate::{Gate, dist_btwn_points},
+};
 
 #[derive(Debug)]
 pub struct GapTrack {
@@ -27,9 +30,17 @@ impl GapVec {
         let mut slp;
         let mut last_suc_ind: usize = 0; //track the index you left off at
         let mut success; //Track whether intersection was found
+        let mut dist_bef_flag; //Track whether you've gone too far (meters)
         for (gate_ind, gate) in gates.iter().enumerate() {
             //track whether data point was saved
             success = false;
+            if gate_ind + 1 < gates.len() && gate_ind > 0 {
+                dist_bef_flag = gates[gate_ind + 1].dist - gates[gate_ind - 1].dist;
+            } else {
+                dist_bef_flag = u32::MAX; //Basically first and last gate are a bit more nuanced
+            }
+
+            let mut dist_traveled: u32 = 0;
 
             let mut gps_data: Vec<(f32, f32, f32)> = Vec::new(); //dump telemetry data in here
             //As a backup for missed gates append the distance from gate to choose the point w/
@@ -58,6 +69,13 @@ impl GapVec {
                         let current_point = (l_lon, l_lat);
                         let prev_point = (p_lon, p_lat);
                         let points = [prev_point, current_point];
+
+                        dist_traveled += activity_ref.telemetry.distance_m[index].unwrap_or(0)
+                            - activity_ref.telemetry.distance_m[index - 1].unwrap_or(0);
+
+                        if dist_traveled >= dist_bef_flag {
+                            break;
+                        }
 
                         //check if the gate was crossed by that new line (points)
                         if gate.is_crossed(points) {
@@ -92,6 +110,7 @@ impl GapVec {
                         activity_ref.telemetry.timestamps[*min_index].unwrap()
                             - activity_ref.telemetry.timestamps[last_suc_ind].unwrap(),
                     ));
+                    time_vec.push(activity_ref.telemetry.timestamps[*min_index]);
                     gate_gps_index.push(Some(gps_data[0..*gps_data_ind].to_vec())); //needed for visuals
                     gps_data.clear();
                     last_suc_ind = *min_index;
@@ -99,10 +118,12 @@ impl GapVec {
                     println!("Gate #{} was never crossed", gate_ind);
                     split_times.push(None);
                     gate_gps_index.push(None);
+                    time_vec.push(None);
                 }
             }
         }
         assert_eq!(split_times.len(), gate_gps_index.len());
+        assert_eq!(split_times.len(), time_vec.len());
         return Self {
             gap_vec: split_times,
             gate_gps_index,
