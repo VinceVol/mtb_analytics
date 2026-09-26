@@ -244,18 +244,26 @@ impl VideoFolder {
         let comparison_duration = (vid_duration_1.max(vid_duration_2)) as f64;
 
         // 1. Generate Clip 1 with web-compatible H.264 video codec
-        let filter_spec_1 = format!(
-            "[0:v]trim=start={vid_start_1}:duration={vid_duration_1},setpts=PTS-STARTPTS,scale=-1:1080,format=yuv420p[v1]; \
-             [0:a]atrim=start={vid_start_1}:duration={vid_duration_1},asetpts=PTS-STARTPTS[a1]"
-        );
+        // let filter_spec_1 = format!(
+        //     "[0:v]trim=start={vid_start_1}:duration={vid_duration_1},setpts=PTS-STARTPTS,scale=-1:1080,format=yuv420p[v1]; \
+        //      [0:a]atrim=start={vid_start_1}:duration={vid_duration_1},asetpts=PTS-STARTPTS[a1]"
+        // );
         let mut child_1 = FfmpegCommand::new()
-            .input(gv_1_video.fp.clone())
-            .filter_complex(filter_spec_1)
-            .map("[v1]")
-            .map("[a1]")
-            .args(["-c:v", "libx264", "-preset", "ultrafast"])
+            .args(["-ss", &vid_start_1.to_string()])
+            .args(["-i", &gv_1_video.fp.to_string()])
+            .args(["-t", &vid_duration_1.to_string()])
+            .args(["-c", "copy"]) // Copies compressed packets directly
+            .args(["-avoid_negative_ts", "make_zero"])
             .output(clip1_output)
             .spawn()?;
+        // let mut child_1 = FfmpegCommand::new()
+        //     .input(gv_1_video.fp.clone())
+        //     .filter_complex(filter_spec_1)
+        //     .map("[v1]")
+        //     .map("[a1]")
+        //     .args(["-c:v", "libx264", "-preset", "ultrafast"])
+        //     .output(clip1_output)
+        //     .spawn()?;
 
         for event in child_1.iter()? {
             if let FfmpegEvent::Progress(progress) = event {
@@ -264,18 +272,26 @@ impl VideoFolder {
         }
 
         // 2. Generate Clip 2 with web-compatible H.264 video codec
-        let filter_spec_2 = format!(
-            "[0:v]trim=start={vid_start_2}:duration={vid_duration_2},setpts=PTS-STARTPTS,scale=-1:1080,format=yuv420p[v2]; \
-             [0:a]atrim=start={vid_start_2}:duration={vid_duration_2},asetpts=PTS-STARTPTS[a2]"
-        );
+        // let filter_spec_2 = format!(
+        //     "[0:v]trim=start={vid_start_2}:duration={vid_duration_2},setpts=PTS-STARTPTS,scale=-1:1080,format=yuv420p[v2]; \
+        //      [0:a]atrim=start={vid_start_2}:duration={vid_duration_2},asetpts=PTS-STARTPTS[a2]"
+        // );
         let mut child_2 = FfmpegCommand::new()
-            .input(gv_2_video.fp.clone())
-            .filter_complex(filter_spec_2)
-            .map("[v2]")
-            .map("[a2]")
-            .args(["-c:v", "libx264", "-preset", "ultrafast"])
+            .args(["-ss", &vid_start_2.to_string()])
+            .args(["-i", &gv_2_video.fp.to_string()])
+            .args(["-t", &vid_duration_2.to_string()])
+            .args(["-c", "copy"]) // Copies compressed packets directly
+            .args(["-avoid_negative_ts", "make_zero"])
             .output(clip2_output)
             .spawn()?;
+        // let mut child_2 = FfmpegCommand::new()
+        //     .input(gv_2_video.fp.clone())
+        //     .filter_complex(filter_spec_2)
+        //     .map("[v2]")
+        //     .map("[a2]")
+        //     .args(["-c:v", "libx264", "-preset", "ultrafast"])
+        //     .output(clip2_output)
+        //     .spawn()?;
 
         for event in child_2.iter()? {
             if let FfmpegEvent::Progress(progress) = event {
