@@ -1,4 +1,4 @@
-use std::{io, path::Path, sync::mpsc::Receiver};
+use std::{path::Path, sync::mpsc::Receiver};
 
 use inquire::Select;
 
@@ -112,7 +112,7 @@ fn main() {
                         continue;
                     }
                     //Pull the gate data for the chosen segment
-                    let seg_ref = Segment::check_seg(&segment_to_compare.as_ref().unwrap())
+                    let _seg_ref = Segment::check_seg(&segment_to_compare.as_ref().unwrap())
                         .expect("issues opening segment");
 
                     let mut run_list =
@@ -150,8 +150,8 @@ fn main() {
 }
 
 fn activate_plots(
-    A1: Activity,
-    A2: Activity,
+    a1: Activity,
+    a2: Activity,
     segment_to_compare: Option<String>,
     rx: &Receiver<WebMessage>,
 ) {
@@ -167,12 +167,12 @@ fn activate_plots(
     for (graph_ind, gate) in gates.iter().enumerate() {
         let first_gate_vec = GapVec::new(
             &gate,
-            &A1.segmented_activity(&segment_to_compare.as_ref().unwrap())
+            &a1.segmented_activity(&segment_to_compare.as_ref().unwrap())
                 .unwrap(),
         );
         let second_gate_vec = GapVec::new(
             &gate,
-            &A2.segmented_activity(&segment_to_compare.as_ref().unwrap())
+            &a2.segmented_activity(&segment_to_compare.as_ref().unwrap())
                 .unwrap(),
         );
         let gap_track =

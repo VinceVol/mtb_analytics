@@ -1,17 +1,25 @@
-use std::io::Read;
+use serde::Deserialize;
 use std::str::FromStr;
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use serde::Deserialize;
 use tiny_http::{Header, Method, Response, Server};
 
 #[derive(Debug, Clone)]
 pub enum WebMessage {
-    MapClick { lat: f64, lng: f64 },
+    MapClick {
+        lat: f64,
+        lng: f64,
+    },
     SegmentSelected(String),
-    GateClicked { gate_id: usize, dataset_name: String },
+    GateClicked {
+        gate_id: usize,
+        dataset_name: String,
+    },
     TabClosed,
-    Unknown { action: String, payload: serde_json::Value },
+    Unknown {
+        action: String,
+        payload: serde_json::Value,
+    },
 }
 
 #[derive(Deserialize)]
@@ -31,8 +39,10 @@ pub fn start_http_listener(server_port: u16) -> Receiver<WebMessage> {
         for mut request in server.incoming_requests() {
             // Standard CORS Headers for local HTTP requests from browser scripts
             let cors_origin = Header::from_str("Access-Control-Allow-Origin: *").unwrap();
-            let cors_methods = Header::from_str("Access-Control-Allow-Methods: GET, POST, OPTIONS").unwrap();
-            let cors_headers = Header::from_str("Access-Control-Allow-Headers: Content-Type").unwrap();
+            let cors_methods =
+                Header::from_str("Access-Control-Allow-Methods: GET, POST, OPTIONS").unwrap();
+            let cors_headers =
+                Header::from_str("Access-Control-Allow-Headers: Content-Type").unwrap();
 
             // 1. Handle CORS Preflight Requests
             if request.method() == &Method::Options {
@@ -64,7 +74,8 @@ pub fn start_http_listener(server_port: u16) -> Receiver<WebMessage> {
                                 WebMessage::SegmentSelected(seg_id)
                             }
                             "gate_clicked" => {
-                                let gate_id = incoming.data["gate_id"].as_u64().unwrap_or(0) as usize;
+                                let gate_id =
+                                    incoming.data["gate_id"].as_u64().unwrap_or(0) as usize;
                                 let dataset_name = incoming.data["dataset_name"]
                                     .as_str()
                                     .unwrap_or("Unknown")

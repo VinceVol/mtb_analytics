@@ -13,11 +13,9 @@ use std::{
     fmt::Debug,
     fs::{self, DirEntry},
     io::{Read, Write},
-    time::UNIX_EPOCH,
 };
 
 use crate::data_comp::split_gap::GapVec;
-use crate::gate::Gate;
 use crate::{BIN_SAVE_LOC, activity::Activity};
 
 //Setting up the video folder such that it's saved in a binary and if the folder isn't found the user

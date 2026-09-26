@@ -1,14 +1,10 @@
 //Common +/- Green red
 
-use crate::{
-    activity::Activity,
-    gate::{Gate, dist_btwn_points},
-};
+use crate::{activity::Activity, gate::Gate};
 
 #[derive(Debug)]
 pub struct GapTrack {
     pub data: Vec<(f32, f32, f32, f32)>,
-    pub labels: Vec<(f32, f32, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -161,15 +157,10 @@ impl GapTrack {
         //After gathering those differences go back through gap 2 and generate the labels
         // and GapTrack for visuals
         let mut data = Vec::new();
-        let mut labels = Vec::new();
 
         for (index, tele_data) in gap_vec_2.gate_gps_index.iter_mut().enumerate() {
             if tele_data.is_some() {
-                for (tele_index, (long, lat, alt)) in tele_data.as_mut().unwrap().iter().enumerate()
-                {
-                    if tele_index == 0 {
-                        labels.push((*lat, *long, differences[index].unwrap_or(0).to_string()));
-                    }
+                for (long, lat, alt) in tele_data.as_mut().unwrap() {
                     //show a difference of 0 if that difference didnt exist
                     // kind of a flaw for now but whatever. Eventually I should
                     // print missing data purple or something TODO
@@ -182,6 +173,6 @@ impl GapTrack {
                 }
             }
         }
-        Ok(GapTrack { data, labels })
+        Ok(GapTrack { data })
     }
 }
