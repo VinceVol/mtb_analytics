@@ -71,25 +71,6 @@ impl Video {
                     .to_owned()
                     .replace(".bin", "");
                 let activity = Activity::open_bin(&activity_name)?;
-                // println!(
-                //     "The activity: {:?} \n had a start time of {:?}, and a end time of {:?}.\n Clip start time: {:?}",
-                //     activity.metadata_id,
-                //     chrono::DateTime::<Utc>::from_timestamp(
-                //         activity.start_time().unwrap().into(),
-                //         0
-                //     )
-                //     .unwrap()
-                //     .format("%m/%d/%Y %H:%M")
-                //     .to_string(),
-                //     chrono::DateTime::<Utc>::from_timestamp(activity.end_time().unwrap().into(), 0)
-                //         .unwrap()
-                //         .format("%m/%d/%Y %H:%M")
-                //         .to_string(),
-                //     chrono::DateTime::<Utc>::from_timestamp(start_time.into(), 0)
-                //         .unwrap()
-                //         .format("%m/%d/%Y %H:%M")
-                //         .to_string(),
-                // );
                 //5 min before and after the activity timing to consider it as a valid reference
                 if activity.start_time()? - (60 * 5) < start_time
                     && activity.end_time()? + (60 * 5) > start_time
@@ -241,12 +222,7 @@ impl VideoFolder {
 
         let comparison_duration = (vid_duration_1.max(vid_duration_2)) as f64;
 
-        // 1. Generate Clip 1 with web-compatible H.264 video codec
-        // let filter_spec_1 = format!(
-        //     "[0:v]trim=start={vid_start_1}:duration={vid_duration_1},setpts=PTS-STARTPTS,scale=-1:1080,format=yuv420p[v1]; \
-        //      [0:a]atrim=start={vid_start_1}:duration={vid_duration_1},asetpts=PTS-STARTPTS[a1]"
-        // );
-        let mut child_1 = FfmpegCommand::new()
+               let mut child_1 = FfmpegCommand::new()
             .args(["-ss", &vid_start_1.to_string()])
             .args(["-i", &gv_1_video.fp.to_string()])
             .args(["-t", &vid_duration_1.to_string()])
@@ -254,27 +230,14 @@ impl VideoFolder {
             .args(["-avoid_negative_ts", "make_zero"])
             .output(clip1_output)
             .spawn()?;
-        // let mut child_1 = FfmpegCommand::new()
-        //     .input(gv_1_video.fp.clone())
-        //     .filter_complex(filter_spec_1)
-        //     .map("[v1]")
-        //     .map("[a1]")
-        //     .args(["-c:v", "libx264", "-preset", "ultrafast"])
-        //     .output(clip1_output)
-        //     .spawn()?;
-
+       
         for event in child_1.iter()? {
             if let FfmpegEvent::Progress(progress) = event {
                 println!("Processing Clip 1 frame: {}", progress.frame);
             }
         }
 
-        // 2. Generate Clip 2 with web-compatible H.264 video codec
-        // let filter_spec_2 = format!(
-        //     "[0:v]trim=start={vid_start_2}:duration={vid_duration_2},setpts=PTS-STARTPTS,scale=-1:1080,format=yuv420p[v2]; \
-        //      [0:a]atrim=start={vid_start_2}:duration={vid_duration_2},asetpts=PTS-STARTPTS[a2]"
-        // );
-        let mut child_2 = FfmpegCommand::new()
+               let mut child_2 = FfmpegCommand::new()
             .args(["-ss", &vid_start_2.to_string()])
             .args(["-i", &gv_2_video.fp.to_string()])
             .args(["-t", &vid_duration_2.to_string()])
@@ -282,15 +245,7 @@ impl VideoFolder {
             .args(["-avoid_negative_ts", "make_zero"])
             .output(clip2_output)
             .spawn()?;
-        // let mut child_2 = FfmpegCommand::new()
-        //     .input(gv_2_video.fp.clone())
-        //     .filter_complex(filter_spec_2)
-        //     .map("[v2]")
-        //     .map("[a2]")
-        //     .args(["-c:v", "libx264", "-preset", "ultrafast"])
-        //     .output(clip2_output)
-        //     .spawn()?;
-
+       
         for event in child_2.iter()? {
             if let FfmpegEvent::Progress(progress) = event {
                 println!("Processing Clip 2 frame: {}", progress.frame);
@@ -336,17 +291,19 @@ pub fn open_video_aligner_in_browser(
     page_title: &str,
     server_port: u16,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Convert MP4 binary files into Base64 Data URIs to bypass browser file:// CORS restrictions
-    use base64::Engine;
+    // Resolve absolute canonical paths to ensure the local HTTP server can accurately find them
+    let vid1_str = vid1_path.canonicalize()?.to_string_lossy().into_owned();
+    let vid2_str = vid2_path.canonicalize()?.to_string_lossy().into_owned();
 
-    let vid1_bytes = std::fs::read(vid1_path)?;
-    let vid2_bytes = std::fs::read(vid2_path)?;
-
-    let vid1_b64 = base64::engine::general_purpose::STANDARD.encode(&vid1_bytes);
-    let vid2_b64 = base64::engine::general_purpose::STANDARD.encode(&vid2_bytes);
-
-    let vid1_url = format!("data:video/mp4;base64,{}", vid1_b64);
-    let vid2_url = format!("data:video/mp4;base64,{}", vid2_b64);
+    // Encode file paths as URL query parameters to route them directly to your local server streaming endpoint
+    let vid1_url = format!(
+        "http://127.0.0.1:{server_port}/stream?path={}",
+        urlencoding::encode(&vid1_str)
+    );
+    let vid2_url = format!(
+        "http://127.0.0.1:{server_port}/stream?path={}",
+        urlencoding::encode(&vid2_str)
+    );
 
     let payload = serde_json::json!({
         "vid1_url": vid1_url,
@@ -587,37 +544,50 @@ pub fn open_video_aligner_in_browser(
         let isPlaying = false;
         let animationFrameId = null;
 
-        // Initialize sources
         v1.src = DATA.vid1_url;
         v2.src = DATA.vid2_url;
-        v1.load();
-        v2.load();
+
+        function syncClip2Position(forceSeek = false) {
+            const relTime1 = v1.currentTime - DATA.vid1_start;
+            const targetV2Time = DATA.vid2_start + relTime1 + (offsetMs / 1000.0);
+            const drift = v2.currentTime - targetV2Time;
+
+            if (forceSeek || Math.abs(drift) > 0.08) {
+                v2.currentTime = Math.max(0, targetV2Time);
+                v2.playbackRate = 1.0;
+            } else if (isPlaying) {
+                if (drift > 0.015) {
+                    v2.playbackRate = 0.96;
+                } else if (drift < -0.015) {
+                    v2.playbackRate = 1.04;
+                } else {
+                    v2.playbackRate = 1.0;
+                }
+            }
+        }
 
         function updatePlayhead() {
             if (!v1.paused && !v1.ended) {
                 const relativeTime = v1.currentTime - DATA.vid1_start;
                 const progress = Math.min(Math.max(relativeTime / DATA.duration, 0), 1);
                 seeker.value = progress * 100;
-                
-                formatTime(relativeTime);
-                syncClip2Position();
-                animationFrameId = requestAnimationFrame(updatePlayhead);
-            }
-        }
 
-        function syncClip2Position() {
-            const relTime1 = v1.currentTime - DATA.vid1_start;
-            const targetV2Time = DATA.vid2_start + relTime1 + (offsetMs / 1000.0);
-            
-            if (Math.abs(v2.currentTime - targetV2Time) > 0.04) {
-                v2.currentTime = targetV2Time;
+                formatTime(relativeTime);
+                syncClip2Position(false);
+
+                if (relativeTime >= DATA.duration) {
+                    pausePlayback();
+                    return;
+                }
+
+                animationFrameId = requestAnimationFrame(updatePlayhead);
             }
         }
 
         function applyOffset(deltaMs) {
             offsetMs += deltaMs;
             offsetDisplay.innerText = (offsetMs >= 0 ? "+" : "") + offsetMs + " ms";
-            syncClip2Position();
+            syncClip2Position(true);
 
             sendToRust('offset_changed', {
                 offset_ms: offsetMs,
@@ -635,26 +605,37 @@ pub fn open_video_aligner_in_browser(
             timeDisplay.innerText = `${pad(mins)}:${pad(secs)}.${pad(ms, 3)}`;
         }
 
+        function pausePlayback() {
+            v1.pause();
+            v2.pause();
+            playBtn.innerText = "Play";
+            isPlaying = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        }
+
+        async function startPlayback() {
+            syncClip2Position(true);
+            try {
+                await Promise.all([v1.play(), v2.play()]);
+                playBtn.innerText = "Pause";
+                isPlaying = true;
+                animationFrameId = requestAnimationFrame(updatePlayhead);
+            } catch (err) {
+                console.error("Playback execution error:", err);
+            }
+        }
+
         playBtn.addEventListener('click', () => {
             if (isPlaying) {
-                v1.pause();
-                v2.pause();
-                playBtn.innerText = "Play";
-                isPlaying = false;
-                if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                pausePlayback();
             } else {
-                syncClip2Position();
-                Promise.all([v1.play(), v2.play()]).then(() => {
-                    playBtn.innerText = "Pause";
-                    isPlaying = true;
-                    animationFrameId = requestAnimationFrame(updatePlayhead);
-                }).catch(err => console.error("Playback error:", err));
+                startPlayback();
             }
         });
 
         restartBtn.addEventListener('click', () => {
             v1.currentTime = DATA.vid1_start;
-            syncClip2Position();
+            syncClip2Position(true);
             seeker.value = 0;
             formatTime(0);
         });
@@ -663,9 +644,12 @@ pub fn open_video_aligner_in_browser(
             const pct = parseFloat(e.target.value) / 100.0;
             const relTime = pct * DATA.duration;
             v1.currentTime = DATA.vid1_start + relTime;
-            syncClip2Position();
+            syncClip2Position(true);
             formatTime(relTime);
         });
+
+        v1.addEventListener('waiting', () => v2.pause());
+        v1.addEventListener('playing', () => { if (isPlaying) v2.play(); });
 
         document.getElementById('off-m1000').addEventListener('click', () => applyOffset(-1000));
         document.getElementById('off-m100').addEventListener('click', () => applyOffset(-100));
