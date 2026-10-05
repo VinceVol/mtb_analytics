@@ -8,3 +8,8 @@ We all have dreams, here are mine for this "*software*"
 - Choose which segment you're interested in in the terminal options
 - Run either an individualized analysis or a full one that shows where time is lost
 --Show lost time video clip side by side with the PR/REF
+
+## Active Todos!
+- [ ] Update the gates for a segment bin to include every possible gate and then let the compare function be fed the frequency at which we want to read the gates
+- [ ] Refactor the gate crossing logic to interpolate between gates to get time when a gate is missed
+- [ ] Add a graph for simply looking at overall time at each gate and not just the splits
