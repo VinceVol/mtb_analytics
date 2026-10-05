@@ -346,9 +346,6 @@ pub fn open_video_aligner_in_browser(
                 }}).catch(err => console.error('Failed to send event to Rust:', err));
             }}
 
-            window.addEventListener('beforeunload', function () {{
-                const url = 'http://127.0.0.1:{server_port}/api/event';
-                const payload = JSON.stringify({{ action: 'tab_closed', data: {{}} }});
 
                 if (navigator.sendBeacon) {{
                     const blob = new Blob([payload], {{ type: 'text/plain;charset=UTF-8' }});
