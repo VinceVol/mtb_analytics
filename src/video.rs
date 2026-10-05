@@ -214,10 +214,10 @@ impl VideoFolder {
         let _ = std::fs::remove_file(clip1_output);
         let _ = std::fs::remove_file(clip2_output);
 
-        let unix_start_1 = gv_1.time_vec[start_gate].unwrap_or_default();
-        let unix_end_1 = gv_1.time_vec[start_gate + 1].unwrap_or_default();
-        let unix_start_2 = gv_2.time_vec[start_gate].unwrap_or_default();
-        let unix_end_2 = gv_2.time_vec[start_gate + 1].unwrap_or_default();
+        let unix_start_1 = gv_1.time_vec[start_gate + 1].unwrap_or_default();
+        let unix_end_1 = gv_1.time_vec[start_gate + 2].unwrap_or_default();
+        let unix_start_2 = gv_2.time_vec[start_gate + 1].unwrap_or_default();
+        let unix_end_2 = gv_2.time_vec[start_gate + 2].unwrap_or_default();
 
         let gv_1_video = self
             .videos
@@ -231,6 +231,7 @@ impl VideoFolder {
             .find(|v| v.contains(unix_start_2) && v.contains(unix_end_2))
             .ok_or("unable to find the second gap vec video")?;
 
+        //Basically its easiest if we for now we set the video start to the segment start
         let off_1: i32 = gv_1.time_vec[0].unwrap_or_default() as i32 - gv_1_video.start_time as i32;
         let off_2: i32 = gv_2.time_vec[0].unwrap_or_default() as i32 - gv_2_video.start_time as i32;
 
