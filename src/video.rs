@@ -93,7 +93,7 @@ impl Video {
     }
 }
 
-static VIDEO_LOC: &'static str = "./video_fldr.bin";
+pub static VIDEO_LOC: &'static str = "./video_fldr.bin";
 impl VideoFolder {
     pub fn open() -> Result<Self, Box<dyn std::error::Error>> {
         let mut file = match std::fs::File::open(VIDEO_LOC) {
@@ -114,20 +114,40 @@ impl VideoFolder {
         file.read_to_end(&mut bytes)?;
 
         //Check if there's a saved Video Folder binary if not make one
-        let mut archived = match rkyv::access::<ArchivedVideoFolder, rancor::Error>(&bytes[..]) {
-            Ok(archived_ok) => deserialize::<VideoFolder, rancor::Error>(archived_ok)?,
+        // use corrupt var to solve either a corrupt binary or a improper folder
+        let mut corrupt = false;
+        let mut archived_opt;
+        archived_opt = match rkyv::access::<ArchivedVideoFolder, rancor::Error>(&bytes[..]) {
+            Ok(archived_ok) => {
+                let archived = deserialize::<VideoFolder, rancor::Error>(archived_ok)?;
+                if std::fs::exists(archived.fp.as_ref().unwrap_or(&String::from("")))? {
+                    Some(archived)
+                } else {
+                    println!(
+                        "Video Folder struct binary contains a pointer to a folder that doesn't exist"
+                    );
+                    corrupt = true;
+                    None
+                }
+            }
             Err(_e) => {
+                corrupt = true;
                 println!(
                     "Video Folder struct binary found but corrupted! Generating a fresh Binary now..."
                 );
-                let v_f = VideoFolder {
-                    fp: None,
-                    videos: Vec::new(),
-                };
-                v_f.save()?;
-                v_f
+                None
             }
         };
+
+        if corrupt {
+            let v_f = VideoFolder {
+                fp: None,
+                videos: Vec::new(),
+            };
+            v_f.save()?;
+            archived_opt = Some(v_f);
+        }
+        let mut archived = archived_opt.unwrap();
 
         //Open the videofolder if it is some else prompt user for new folder
         loop {
@@ -222,7 +242,7 @@ impl VideoFolder {
 
         let comparison_duration = (vid_duration_1.max(vid_duration_2)) as f64;
 
-               let mut child_1 = FfmpegCommand::new()
+        let mut child_1 = FfmpegCommand::new()
             .args(["-ss", &vid_start_1.to_string()])
             .args(["-i", &gv_1_video.fp.to_string()])
             .args(["-t", &vid_duration_1.to_string()])
@@ -230,14 +250,14 @@ impl VideoFolder {
             .args(["-avoid_negative_ts", "make_zero"])
             .output(clip1_output)
             .spawn()?;
-       
+
         for event in child_1.iter()? {
             if let FfmpegEvent::Progress(progress) = event {
                 println!("Processing Clip 1 frame: {}", progress.frame);
             }
         }
 
-               let mut child_2 = FfmpegCommand::new()
+        let mut child_2 = FfmpegCommand::new()
             .args(["-ss", &vid_start_2.to_string()])
             .args(["-i", &gv_2_video.fp.to_string()])
             .args(["-t", &vid_duration_2.to_string()])
@@ -245,7 +265,7 @@ impl VideoFolder {
             .args(["-avoid_negative_ts", "make_zero"])
             .output(clip2_output)
             .spawn()?;
-       
+
         for event in child_2.iter()? {
             if let FfmpegEvent::Progress(progress) = event {
                 println!("Processing Clip 2 frame: {}", progress.frame);

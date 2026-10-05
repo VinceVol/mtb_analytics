@@ -10,7 +10,7 @@ use crate::{
     },
     listener::{WebMessage, start_http_listener},
     segments::{Segment, avail_seg_act, list_segments},
-    video::VideoFolder,
+    video::{VIDEO_LOC, VideoFolder},
 };
 
 use ffmpeg_sidecar::download::auto_download;
@@ -47,7 +47,12 @@ fn main() {
 
     //user selects this based on those available -- this opens up other options
     let mut segment_to_compare: Option<String> = None;
-    let mut usr_options = vec!["Q = Quit", "LS = List Available Segments"];
+    let mut usr_options = vec![
+        "Q = Quit",
+        "LS = List Available Segments",
+        "R = Refresh Bins",
+        "Vid = Change Vid FLDR",
+    ];
     loop {
         if let Ok(input) = Select::new("Choose a route", usr_options.clone()).prompt() {
             match input {
@@ -139,6 +144,21 @@ fn main() {
                         segment_to_compare.clone(),
                         &rx,
                     );
+                }
+                "R = Refresh Bins" => {
+                    std::fs::remove_dir_all(BIN_SAVE_LOC)
+                        .expect("Unable to delete fit file bine data");
+                    std::fs::remove_dir_all(SEGMENT_LOC)
+                        .expect("Unable to delete segment bin data");
+                    std::fs::create_dir_all(BIN_SAVE_LOC)
+                        .expect("BINCODE folder unable to be created");
+                    std::fs::create_dir_all(SEGMENT_LOC)
+                        .expect("SEGMENT folder unable to be created");
+                    Activity::refresh_bin().expect("Unable to refresh bin");
+                }
+                "Vid = Change Vid FLDR" => {
+                    std::fs::remove_file(VIDEO_LOC).expect("Unable to delete the video bin file");
+                    VideoFolder::open().unwrap();
                 }
                 "Q = Quit" => {
                     break;
